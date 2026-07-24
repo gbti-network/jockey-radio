@@ -23,6 +23,10 @@ build/
 !.docs/*.css
 !.docs/assets/
 
+# Local Claude Code config / project instructions (kept out of version control).
+.claude/
+CLAUDE.md
+
 # Python bytecode / stray logs
 __pycache__/
 *.pyc
