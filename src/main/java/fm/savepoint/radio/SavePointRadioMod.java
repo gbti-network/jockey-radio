@@ -60,7 +60,7 @@ public final class SavePointRadioMod implements ModInitializer {
 					+ "to rebroadcast any third-party content you link on this server.");
 		} else {
 			LOGGER.info("[radio] platform links are disabled (default). Set enablePlatformLinks=true in "
-					+ "savepoint_radio.json to enable YouTube/SoundCloud/Mixcloud/Twitch/Kick discs.");
+					+ "savepoint_radio.json to enable SoundCloud/Mixcloud/Bandcamp/Twitch/Kick discs.");
 		}
 		// Report what this host actually permits (process spawning / executing a binary we place on
 		// disk / whether ffmpeg is present). On a managed host with no shell this log is the only way

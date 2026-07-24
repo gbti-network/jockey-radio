@@ -48,11 +48,13 @@ public final class BundledBinaries {
 	 * Identity of the bundled binary set. Bumped whenever the shipped binaries change, so a mod
 	 * upgrade re-extracts instead of running a stale copy left by a previous version.
 	 */
-	static final String BUNDLE_VERSION = "ffmpeg-btbn-N125748+ytdlp-2026.07.04";
+	static final String BUNDLE_VERSION = "ffmpeg-btbn-N125748+ytdlp-2026.07.04+deno-2.9.4";
 
 	/** Jar resource paths (absolute, from the class loader root). */
 	private static final String FFMPEG_RESOURCE = "/savepoint_radio/bin/linux-amd64/ffmpeg";
 	private static final String YTDLP_RESOURCE = "/savepoint_radio/bin/linux-amd64/yt-dlp";
+	/** JavaScript runtime yt-dlp uses to solve some platforms' signature challenge (optional). */
+	private static final String DENO_RESOURCE = "/savepoint_radio/bin/linux-amd64/deno";
 
 	/** The compiled defaults in {@link RadioConfig}; an unchanged value means "not overridden". */
 	static final String FFMPEG_DEFAULT = "ffmpeg";
@@ -83,11 +85,18 @@ public final class BundledBinaries {
 				Files.createDirectories(binDir);
 				extract(FFMPEG_RESOURCE, ffmpeg);
 				extract(YTDLP_RESOURCE, ytdlp);
-				// Marker written LAST, after both binaries are in place, so a crash mid-extract
+				// deno is optional (a thin/older bundle may lack it); yt-dlp uses it for the platforms
+				// that need JS. It sits in the same bin dir, which LinkResolvedFeed puts on yt-dlp's PATH.
+				boolean deno = SavePointRadioMod.class.getResource(DENO_RESOURCE) != null;
+				if (deno) {
+					extract(DENO_RESOURCE, binDir.resolve("deno"));
+				}
+				// Marker written LAST, after every binary is in place, so a crash mid-extract
 				// leaves it stale and the next boot re-extracts rather than trusting a partial set.
 				Files.writeString(marker, BUNDLE_VERSION);
 				SavePointRadioMod.LOGGER.info(
-						"[radio] installed bundled ffmpeg + yt-dlp to {} ({})", binDir, BUNDLE_VERSION);
+						"[radio] installed bundled ffmpeg + yt-dlp{} to {} ({})",
+						deno ? " + deno" : "", binDir, BUNDLE_VERSION);
 			}
 
 			// Only override the DEFAULT bare names - an explicit operator path always wins.

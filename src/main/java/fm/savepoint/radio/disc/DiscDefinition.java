@@ -40,7 +40,7 @@ public final class DiscDefinition {
 		/** sow-009: loop a finite audio file reached over HTTP (direct link or config folder). */
 		@SerializedName("file")
 		FILE,
-		/** sow-007: a platform page URL (YouTube/SoundCloud/Mixcloud/Twitch/Kick) resolved via yt-dlp. */
+		/** sow-007: a platform page URL (SoundCloud/Mixcloud/Bandcamp/Twitch/Kick) resolved via yt-dlp. */
 		@SerializedName("platform")
 		PLATFORM
 	}
@@ -303,8 +303,8 @@ public final class DiscDefinition {
 	}
 
 	/**
-	 * sow-007: a PLATFORM disc's {@link #streamUrl} is a platform PAGE url (YouTube /
-	 * SoundCloud / Mixcloud / Twitch / Kick) that yt-dlp resolves to an audio stream.
+	 * sow-007: a PLATFORM disc's {@link #streamUrl} is a platform PAGE url (SoundCloud /
+	 * Mixcloud / Bandcamp / Twitch / Kick) that yt-dlp resolves to an audio stream.
 	 * Validated as a plain http/https URL here; yt-dlp decides whether it is actually
 	 * supported at play time.
 	 */

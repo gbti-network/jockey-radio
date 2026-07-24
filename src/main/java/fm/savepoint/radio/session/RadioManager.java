@@ -472,8 +472,8 @@ public final class RadioManager {
 						yield new StubStationFeed(discId);
 					}
 					yield new LinkResolvedFeed(discId, StationEndpoints.forDiscResolved(def, config),
-							config.ytdlpBinary, config.ffmpegBinary, config.maxBufferFrames(), config.targetFrames(),
-							config.prerollFrames(), config.reconnectBackoffMaxSeconds,
+							config.ytdlpBinary, config.ytdlpExtraArgs, config.ffmpegBinary, config.maxBufferFrames(),
+							config.targetFrames(), config.prerollFrames(), config.reconnectBackoffMaxSeconds,
 							config.reconnectPreserveBuffer, config.reanchorLowWaterFrames(),
 							config.reanchorSustainFrames(), config.smoothingMode(), config.maxStretchPercent(),
 							def.repeat);

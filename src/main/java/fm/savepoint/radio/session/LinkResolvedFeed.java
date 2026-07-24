@@ -12,19 +12,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Platform-link feed (sow-007): plays a YouTube / SoundCloud / Mixcloud / Twitch / Kick
+ * Platform-link feed (sow-007): plays a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick
  * <em>page</em> URL by resolving it to a real audio stream with <b>yt-dlp</b>, then handing
  * that stream to the shared {@link AbstractFfmpegFeed} pipeline. Backs
  * {@link fm.savepoint.radio.disc.DiscDefinition.SourceType#PLATFORM} discs.
  *
- * <p><b>Why a resolver.</b> A {@code youtube.com/watch?v=…} / {@code soundcloud.com/…} page is
- * NOT a media stream, so ffmpeg cannot open it. {@code yt-dlp -f bestaudio -g <url>} prints a
- * direct audio (or self-refreshing live-HLS) URL, which ffmpeg plays with the same
- * {@code -vn -f s16le} decode every other feed uses. Audio-only ({@code bestaudio}) matches the
- * existing {@code -vn} and saves bandwidth.
+ * <p><b>Why a resolver.</b> A {@code soundcloud.com/…} page is NOT a media stream, so ffmpeg
+ * cannot open it. {@code yt-dlp -f bestaudio -g <url>} prints a direct audio (or self-refreshing
+ * live-HLS) URL, which ffmpeg plays with the same {@code -vn -f s16le} decode every other feed
+ * uses. Audio-only ({@code bestaudio}) matches the existing {@code -vn} and saves bandwidth.
  *
  * <p><b>Resolve-per-spawn.</b> {@link #buildCommand()} re-resolves on every (re)connect, so an
- * expired signed URL (YouTube) or a rolled live edge is refreshed for free by the existing
+ * expired signed CDN URL or a rolled live edge is refreshed for free by the existing
  * reconnect ladder. A finite track EOFs and reconnects (re-resolves + replays); a live stream's
  * ffmpeg-level {@code -reconnect} rides brief drops without a full respawn.
  *
@@ -46,6 +45,14 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 	private final String pageUrl;
 	private final String displayUrl;
 	private final String ytdlpBinary;
+	/** Operator extra args for yt-dlp (cookies/proxy/extractor-args); never null. */
+	private final List<String> ytdlpExtraArgs;
+	/**
+	 * Directory of {@link #ytdlpBinary} when it is a real path, else null. Prepended to the yt-dlp
+	 * subprocess PATH so a co-located JS runtime (the bundled {@code deno}) is auto-detected - yt-dlp
+	 * needs it to solve some platforms' signature challenge.
+	 */
+	private final String ytdlpBinDir;
 	/** sow-012: play once and stop (false) vs loop (true) - only honoured for a NON-live VOD. */
 	private final boolean repeat;
 	/** sow-012: whether the LAST resolve reported a live source ({@code is_live=true}); volatile, set per resolve. */
@@ -55,15 +62,18 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 	private volatile Process resolveProcess;
 
 	public LinkResolvedFeed(String stationKey, StationEndpoints.Endpoint endpoint, String ytdlpBinary,
-			String ffmpegBinary, int maxBufferFrames, int targetFrames, int prerollFrames, long maxBackoffSeconds,
-			boolean reconnectPreserveBuffer, int reanchorLowWaterFrames, int reanchorSustainFrames,
-			String smoothingMode, double maxStretchPercent, boolean repeat) {
+			List<String> ytdlpExtraArgs, String ffmpegBinary, int maxBufferFrames, int targetFrames,
+			int prerollFrames, long maxBackoffSeconds, boolean reconnectPreserveBuffer,
+			int reanchorLowWaterFrames, int reanchorSustainFrames, String smoothingMode,
+			double maxStretchPercent, boolean repeat) {
 		super(stationKey, ffmpegBinary, maxBufferFrames, targetFrames, prerollFrames, maxBackoffSeconds,
 				reconnectPreserveBuffer, reanchorLowWaterFrames, reanchorSustainFrames,
 				smoothingMode, maxStretchPercent);
 		this.pageUrl = endpoint.effectiveUrl();
 		this.displayUrl = endpoint.displayUrl();
 		this.ytdlpBinary = ytdlpBinary;
+		this.ytdlpExtraArgs = ytdlpExtraArgs == null ? List.of() : List.copyOf(ytdlpExtraArgs);
+		this.ytdlpBinDir = binDirOf(ytdlpBinary);
 		this.repeat = repeat;
 		// The page URL is usually public, but the RESOLVED media URL that ends up in the
 		// ffmpeg argv is a signed CDN link. Registering here means the base sanitize masks
@@ -92,13 +102,22 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		CompletableFuture<Void> killer = null;
 		AtomicBoolean timedOut = new AtomicBoolean();
 		try {
-			// argv (no shell) - the page URL cannot inject; the trailing "--" ends option parsing.
-			// stderr DISCARDed so it can never fill a pipe and stall waitFor.
 			// argv (no shell) - the page URL cannot inject; built by YtDlpResolve so the exact
-			// arguments (format selector, printed fields, trailing "--") are pinned by unit tests.
-			p = new ProcessBuilder(YtDlpResolve.argv(ytdlpBinary, pageUrl))
-					.redirectError(ProcessBuilder.Redirect.DISCARD)
-					.start();
+			// arguments (format selector, printed fields, extra args, trailing "--") are pinned by
+			// unit tests. redirectErrorStream folds yt-dlp's stderr INTO stdout: the prefix parser
+			// ignores non-prefix lines, and on failure we keep the tail as the real reason (so a
+			// "Sign in to confirm you're not a bot" / JS-runtime error reaches the operator's log
+			// instead of a bare "exit=1"). One merged stream also means no second pipe to drain.
+			ProcessBuilder pb = new ProcessBuilder(YtDlpResolve.argv(ytdlpBinary, pageUrl, ytdlpExtraArgs))
+					.redirectErrorStream(true);
+			if (ytdlpBinDir != null) {
+				// Put the bundled bin dir on PATH so yt-dlp finds the co-located `deno` JS runtime
+				// (enabled by default in yt-dlp) - required for some platforms' signature challenge.
+				String path = pb.environment().getOrDefault("PATH", "");
+				pb.environment().put("PATH",
+						path.isEmpty() ? ytdlpBinDir : ytdlpBinDir + java.io.File.pathSeparator + path);
+			}
+			p = pb.start();
 			// Publish the handle so stop() can kill a resolve that is still running. Without
 			// this the child is reachable only from this frame: an interrupt cannot break a
 			// blocking pipe read, so neither stop() nor shutdown() could ever free it.
@@ -133,16 +152,19 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 			// a URL must not be thrown away as "timed out" (a needless reconnect + spurious WARN).
 			YtDlpResolve.Resolved resolved = YtDlpResolve.parse(out);
 			if (!resolved.ok()) {
+				// yt-dlp's own error text (its stderr, merged in), sanitized and tail-trimmed.
+				String detail = ytdlpErrorTail(out);
+				String suffix = detail.isEmpty() ? "" : ": " + detail;
 				if (timedOut.get()) {
-					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s");
+					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s" + suffix);
 				}
 				if (!p.waitFor(RESOLVE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s");
+					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s" + suffix);
 				}
 				if (p.exitValue() != 0) {
-					return resolveFailed("yt-dlp exit=" + p.exitValue());
+					return resolveFailed("yt-dlp exit=" + p.exitValue() + suffix);
 				}
-				return resolveFailed("no URL printed");
+				return resolveFailed("no URL printed" + suffix);
 			}
 			// "True" => live (keeps reconnecting even with repeat off); "False"/"NA"/absent => finite.
 			lastResolvedLive = resolved.live();
@@ -180,6 +202,47 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		if (p != null) {
 			p.destroyForcibly();
 		}
+	}
+
+	/** The parent directory of a real yt-dlp path (for the deno PATH), or null for a bare PATH name. */
+	private static String binDirOf(String binary) {
+		if (binary == null || binary.isBlank()) {
+			return null;
+		}
+		java.nio.file.Path p = java.nio.file.Path.of(binary);
+		// A bare "yt-dlp" (PATH lookup) has no usable parent dir; only a real path co-locates deno.
+		if (!p.isAbsolute() && p.getNameCount() == 1) {
+			return null;
+		}
+		java.nio.file.Path parent = p.toAbsolutePath().getParent();
+		return parent == null ? null : parent.toString();
+	}
+
+	/**
+	 * yt-dlp's own error/warning text, extracted from the merged output: every line that is NOT one
+	 * of our {@code URL=}/{@code LIVE=}/{@code ABR=}/{@code PROTO=} prints is yt-dlp's stderr. Returns
+	 * the last couple of such lines, sanitized (so a page URL/token in the message is redacted) and
+	 * length-capped, or "" when yt-dlp said nothing.
+	 */
+	private String ytdlpErrorTail(List<String> out) {
+		List<String> errs = new ArrayList<>();
+		for (String line : out) {
+			if (line == null) {
+				continue;
+			}
+			String t = line.strip();
+			if (t.isEmpty() || t.startsWith("URL=") || t.startsWith("LIVE=")
+					|| t.startsWith("ABR=") || t.startsWith("PROTO=")) {
+				continue;
+			}
+			errs.add(t);
+		}
+		if (errs.isEmpty()) {
+			return "";
+		}
+		String tail = String.join(" | ", errs.subList(Math.max(0, errs.size() - 2), errs.size()));
+		tail = sanitize(tail);
+		return tail.length() > 240 ? tail.substring(0, 240) + "…" : tail;
 	}
 
 	/** Logs a resolve failure once per failure streak (avoids spamming the reconnect loop). */

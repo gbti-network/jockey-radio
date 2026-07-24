@@ -70,7 +70,7 @@ public interface StationFeed {
 	/**
 	 * sow-006/sow-012: whether this feed carries a TRULY LIVE source - a live SavePoint HLS station, an
 	 * RTMP publisher, or a platform stream yt-dlp reports {@code is_live=true} (Twitch/Kick live). A
-	 * finite FILE or a non-live platform VOD (a YouTube video) is {@code false}. The now-playing HUD uses
+	 * finite FILE or a non-live platform VOD (a SoundCloud track) is {@code false}. The now-playing HUD uses
 	 * this to show "on air" only for live sources. Default {@code false} (the stub and finite feeds). Any
 	 * thread.
 	 */

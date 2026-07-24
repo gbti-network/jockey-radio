@@ -225,7 +225,7 @@ public final class SavePointDialogs {
 		boolean platformEnabled = RadioConfig.get().enablePlatformLinks;
 		if (platformEnabled) {
 			actions.add(navButton(platform, Lang.tr("savepoint_radio.source.platform_tip",
-					"Paste a YouTube / SoundCloud / Mixcloud / Twitch / Kick link (resolved via yt-dlp)"),
+					"Paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link (resolved via yt-dlp)"),
 					"create_platform", 260));
 		}
 		actions.add(navButton(Lang.tr("savepoint_radio.button.back", "Back"), "root", 150));
@@ -233,7 +233,7 @@ public final class SavePointDialogs {
 		List<DialogBody> body = new ArrayList<>();
 		body.add(body(Lang.tr("savepoint_radio.source.body", "Where does this disc's audio come from?")));
 		if (!platformEnabled) {
-			body.add(body(note("Platform links (YouTube / SoundCloud / Twitch / …) are disabled. "
+			body.add(body(note("Platform links (SoundCloud / Mixcloud / Bandcamp / Twitch / …) are disabled. "
 					+ "Enable enablePlatformLinks in savepoint_radio.json only if you have the rights "
 					+ "to rebroadcast that content on your server.")));
 		}
@@ -410,7 +410,7 @@ public final class SavePointDialogs {
 	}
 
 	/**
-	 * The PLATFORM create/edit form (sow-007). Plays a YouTube / SoundCloud / Mixcloud /
+	 * The PLATFORM create/edit form (sow-007). Plays a SoundCloud / Mixcloud / Bandcamp /
 	 * Twitch / Kick page URL, resolved to audio by yt-dlp. Mirrors the stream form; the
 	 * {@code stream_url} input holds the platform page link.
 	 */
@@ -423,7 +423,7 @@ public final class SavePointDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this platform-link disc."))
 				: body(Lang.tr("savepoint_radio.form.platform.body_create",
-						"New platform disc - paste a YouTube / SoundCloud / Mixcloud / Twitch / Kick link; yt-dlp resolves it to audio.")));
+						"New platform disc - paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link; yt-dlp resolves it to audio.")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
@@ -437,13 +437,13 @@ public final class SavePointDialogs {
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		inputs.add(new Input("stream_url",
-				text(Lang.tr("savepoint_radio.input.platform_url", "Platform link (YouTube / SoundCloud / Twitch / ...)"),
+				text(Lang.tr("savepoint_radio.input.platform_url", "Platform link (SoundCloud / Mixcloud / Twitch / ...)"),
 						pick(values, d -> d.streamUrl, ""), 512)));
-		// sow-012: a non-live VOD (e.g. a YouTube video) with repeat off plays once and stops; a live
+		// sow-012: a non-live VOD (e.g. a SoundCloud track) with repeat off plays once and stops; a live
 		// stream (Twitch/Kick) keeps going regardless of this.
 		inputs.add(new Input("repeat", repeatInput(values.map(d -> d.repeat).orElse(true))));
 		// No Now-Playing URL or marquee field on platform discs (sow-006 review-feedback): a
-		// YouTube/SoundCloud/etc. page URL has no SavePoint now-playing endpoint (resolveNowPlayingUrl
+		// platform page URL has no SavePoint now-playing endpoint (resolveNowPlayingUrl
 		// can't derive one), and the HUD shows only the disc name unless the source is truly live, so a
 		// marquee template would never render. Both fields stay on DiscDefinition for the rare
 		// hand-edited discs.json case; handleSave preserves any stored value on a platform-disc edit.

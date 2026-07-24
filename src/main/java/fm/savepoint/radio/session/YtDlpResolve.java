@@ -32,7 +32,7 @@ public final class YtDlpResolve {
 	 *
 	 * <p>The trailing {@code /bestaudio/best} keeps a DASH-only source resolving — it then fails at
 	 * ffmpeg and rides the reconnect ladder, exactly as before — rather than returning no URL at all.
-	 * YouTube is unaffected: its {@code bestaudio} is opus over plain https, not DASH.</p>
+	 * Most sources are unaffected: their {@code bestaudio} is opus/aac over plain https, not DASH.</p>
 	 */
 	public static final String FORMAT_SELECTOR =
 			"bestaudio[protocol!=http_dash_segments]/best[protocol!=http_dash_segments]/bestaudio/best";
@@ -77,21 +77,40 @@ public final class YtDlpResolve {
 	 */
 	public static final String SOCKET_TIMEOUT_SECONDS = "15";
 
+	/** The yt-dlp argv with no operator extra args. */
+	public static String[] argv(String ytdlpBinary, String pageUrl) {
+		return argv(ytdlpBinary, pageUrl, java.util.List.of());
+	}
+
 	/**
 	 * The yt-dlp argv. Never a shell: the page URL is a separate argument and the trailing {@code --}
 	 * ends option parsing, so a URL beginning with {@code -} cannot be read as a flag.
+	 *
+	 * <p>{@code extraArgs} (from {@code RadioConfig.ytdlpExtraArgs}) are inserted right before the
+	 * {@code --} terminator, so an operator can pass e.g. {@code --cookies <file>}, {@code --proxy
+	 * <url>}, or {@code --extractor-args <...>} to work around a platform's server-side blocking
+	 * (e.g. datacenter-IP bot detection) without a code change. They still cannot inject the URL as a
+	 * flag - it stays after {@code --}.</p>
 	 */
-	public static String[] argv(String ytdlpBinary, String pageUrl) {
-		return new String[] {
+	public static String[] argv(String ytdlpBinary, String pageUrl, java.util.List<String> extraArgs) {
+		java.util.List<String> a = new java.util.ArrayList<>(java.util.List.of(
 				ytdlpBinary, "-f", FORMAT_SELECTOR, "--no-playlist",
 				"--no-warnings", "--quiet",
 				"--socket-timeout", SOCKET_TIMEOUT_SECONDS,
 				"--print", "URL=%(urls)s",
 				"--print", "LIVE=%(is_live)s",
 				"--print", "ABR=%(abr)s",
-				"--print", "PROTO=%(protocol)s",
-				"--", pageUrl
-		};
+				"--print", "PROTO=%(protocol)s"));
+		if (extraArgs != null) {
+			for (String arg : extraArgs) {
+				if (arg != null && !arg.isBlank()) {
+					a.add(arg);
+				}
+			}
+		}
+		a.add("--");
+		a.add(pageUrl);
+		return a.toArray(new String[0]);
 	}
 
 	/**

@@ -84,6 +84,30 @@ class YtDlpResolveTest {
 		}
 
 		@Test
+		@DisplayName("operator extra args are inserted before -- and the URL stays last")
+		void extraArgsBeforeTerminator() {
+			String[] argv = YtDlpResolve.argv("yt-dlp", "https://x.test/v",
+					java.util.List.of("--cookies", "cookies.txt", "--proxy", "http://p:1"));
+			List<String> list = Arrays.asList(argv);
+			int dashDash = list.indexOf("--");
+			assertAll(
+					() -> assertTrue(list.contains("--cookies") && list.contains("cookies.txt"), "cookies passed"),
+					() -> assertTrue(list.contains("--proxy"), "proxy passed"),
+					() -> assertTrue(list.indexOf("--cookies") < dashDash, "extra args come before the -- terminator"),
+					() -> assertEquals("https://x.test/v", argv[argv.length - 1], "URL is still last"),
+					() -> assertEquals(argv.length - 1, dashDash + 1, "URL sits immediately after --"));
+		}
+
+		@Test
+		@DisplayName("null/blank extra args are ignored")
+		void extraArgsNullSafe() {
+			String[] a = YtDlpResolve.argv("yt-dlp", "https://x.test", null);
+			String[] b = YtDlpResolve.argv("yt-dlp", "https://x.test", java.util.List.of("", "  "));
+			assertEquals("https://x.test", a[a.length - 1]);
+			assertEquals("https://x.test", b[b.length - 1]);
+		}
+
+		@Test
 		@DisplayName("bounds a stalled socket so the child self-limits")
 		void passesSocketTimeout() {
 			List<String> argv = Arrays.asList(YtDlpResolve.argv("yt-dlp", "https://example.test/x"));

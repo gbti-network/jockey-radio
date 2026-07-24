@@ -72,18 +72,24 @@ processResources {
 	def productDir = file("${rootDir}/.product")
 	def bundledFfmpeg = file("${productDir}/ffmpeg-linux-amd64-lgpl")
 	def bundledYtdlp = file("${productDir}/yt-dlp-linux")
+	def bundledDeno = file("${productDir}/deno")
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
-	inputs.files(bundledFfmpeg, bundledYtdlp)
+	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
 		into('savepoint_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
 			from(bundledYtdlp) { rename { 'yt-dlp' } }
+			// deno is the JS runtime yt-dlp needs for YouTube; optional (thin bundle omits it).
+			if (bundledDeno.exists()) {
+				from(bundledDeno) { rename { 'deno' } }
+			}
 		}
 		if (bundledNotice.exists()) {
 			into('savepoint_radio') { from(bundledNotice) }
 		}
 		doLast {
-			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp into the jar (~150 MB fat jar).')
+			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +
+					(bundledDeno.exists() ? ' + deno' : '') + ' into the jar.')
 		}
 	} else {
 		doLast {

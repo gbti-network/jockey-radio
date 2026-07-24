@@ -199,16 +199,30 @@ public final class RadioConfig {
 	public boolean useBundledBinaries = true;
 	/**
 	 * sow-007: yt-dlp executable for PLATFORM discs (bare name via PATH, or an absolute
-	 * path). Resolves a YouTube/SoundCloud/Mixcloud/Twitch/Kick page URL to an audio
+	 * path). Resolves a SoundCloud/Mixcloud/Bandcamp/Twitch/Kick page URL to an audio
 	 * stream. Only consulted by PLATFORM discs; if it is missing/outdated those discs
 	 * log a resolve failure and retry, while every other disc is unaffected. Keep it
 	 * updated - platforms change often. Pre-key files load with the default.
 	 */
 	public String ytdlpBinary = "yt-dlp";
 	/**
+	 * Extra command-line arguments passed to yt-dlp before the URL, for working around a platform's
+	 * server-side blocking (datacenter-IP bot detection, geo-restriction) without a code change.
+	 * Default empty. Each element is ONE argument (do not put a flag and its value in the same string).
+	 * Examples:
+	 * <ul>
+	 *   <li>Authenticated session: {@code ["--cookies", "cookies.txt"]} (upload a cookies.txt exported
+	 *       from a logged-in browser).</li>
+	 *   <li>Route through a residential IP: {@code ["--proxy", "http://user:pass@host:port"]}.</li>
+	 * </ul>
+	 * The bundled deno JS runtime is wired up automatically (on yt-dlp's PATH), so you do not need to
+	 * pass {@code --js-runtimes} for that. Only consulted by PLATFORM discs.
+	 */
+	public java.util.List<String> ytdlpExtraArgs = new java.util.ArrayList<>();
+	/**
 	 * sow-013: master gate for PLATFORM (third-party link) discs. <b>Default {@code false}.</b>
 	 *
-	 * <p>Extracting audio from a third-party platform (YouTube / SoundCloud / Mixcloud / Twitch /
+	 * <p>Extracting audio from a third-party platform (SoundCloud / Mixcloud / Bandcamp / Twitch /
 	 * Kick) and rebroadcasting it to an audience is assessed as high-risk on BOTH terms-of-service
 	 * and copyright grounds — see {@code .data/ops/compliance-ops/}. The feature is fully implemented
 	 * and supported, but ships inaccessible: turning this on is a deliberate act by the server

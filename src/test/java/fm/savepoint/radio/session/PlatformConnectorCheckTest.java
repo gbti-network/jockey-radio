@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * LIVE integrity check for every PLATFORM connector (sow-007 / sow-013). Runs the REAL yt-dlp against
  * one known URL per platform and asserts it still resolves to a format ffmpeg can actually demux.
  *
- * <p><b>This test is expected to break over time</b> — that is its job. When YouTube or any other
+ * <p><b>This test is expected to break over time</b> — that is its job. When a
  * platform changes its framework, this is the check that says so, and it names the platform that
  * broke. Because it depends on the network, on yt-dlp being installed, and on remote content still
  * existing, it is tagged {@code connector} and is EXCLUDED from the normal test task. Run it
@@ -67,8 +67,6 @@ class PlatformConnectorCheckTest {
 
 	static Stream<Arguments> targets() {
 		return Stream.of(
-				new Target("YouTube", url("youtube",
-						"https://www.youtube.com/watch?v=eURPTdaO3ck"), false),
 				new Target("Mixcloud", url("mixcloud",
 						"https://www.mixcloud.com/savepointapp/dust-decibels-memory-leak-full-album/"), false),
 				// Forss - "Flickermood": a long-standing Creative Commons track, so the smoke test does
