@@ -101,6 +101,13 @@ public final class RtmpKeepAlive {
 			if (want == null || rtmpIdentityChanged(entry.getValue(), want)) {
 				it.remove();
 				try {
+					// An audible monitor holds an independent ref on this same feed key. Unless it
+					// is torn down first, release() below cannot reach zero refs, the stale feed is
+					// never stopped, and the re-acquire hands back the OLD listener (old bind/port/
+					// stream key) - so a rotated key silently keeps accepting the revoked value.
+					if (key.startsWith("disc:")) {
+						MonitorService.get().stopForDisc(key.substring("disc:".length()));
+					}
 					FeedRegistry.get().release(key);
 					SavePointRadioMod.LOGGER.info("[radio] rtmp keep-alive released station={}", key);
 				} catch (Throwable t) {

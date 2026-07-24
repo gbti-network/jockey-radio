@@ -2,6 +2,8 @@ package fm.savepoint.radio.session;
 
 import fm.savepoint.radio.SavePointRadioMod;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * RTMP-receive feed: the mod runs an ffmpeg RTMP listener and a DJ/OBS/relay
  * publishes into it. {@code ffmpeg -listen 1 -i rtmp://<bind>:<port>/live/<key>}
@@ -35,6 +37,14 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	 * hammering the port and the log.
 	 */
 	private static final long ERROR_RESPAWN_DELAY_MILLIS = 1000L;
+	/**
+	 * How many consecutive errored attempts keep the fast fixed delay before the delay
+	 * escalates. Covers a transient failure or a listen socket still in TIME_WAIT without
+	 * letting a permanently unbindable port spin at 1&nbsp;Hz forever.
+	 */
+	private static final long FAST_ERROR_RETRY_ATTEMPTS = 5L;
+	/** Ceiling for the escalated error delay, so a freed port is still picked up promptly. */
+	private static final long MAX_ERROR_RESPAWN_DELAY_MILLIS = 60_000L;
 
 	public RtmpReceiveFeed(String stationKey, String rtmpBind, int rtmpPort, String streamKey,
 			String ffmpegBinary, int maxBufferFrames, int targetFrames, int prerollFrames, long maxBackoffSeconds,
@@ -139,16 +149,32 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	}
 
 	/**
-	 * An RTMP listener must be back on its port fast whether the last connection
-	 * ended idle (normal publisher disconnect) or errored (the publisher may retry
-	 * any moment), so it never rides the exponential backoff the {@code backoffSeconds}
-	 * argument carries - a short fixed delay either way. This is what shrinks the
-	 * reconnect gap enough for the jitter buffer to bridge SavePoint's periodic
-	 * ~2&nbsp;s upstream restart without an audible dropout.
+	 * An RTMP listener must be back on its port fast whether the last connection ended
+	 * idle (normal publisher disconnect) or errored (the publisher may retry any moment),
+	 * so it does not ride the exponential backoff the {@code backoffSeconds} argument
+	 * carries. That is what shrinks the reconnect gap enough for the jitter buffer to
+	 * bridge SavePoint's periodic ~2&nbsp;s upstream restart without an audible dropout.
+	 *
+	 * <p><b>But a PERMANENT error must not retry forever at that rate.</b> The delay used
+	 * to be a flat 1&nbsp;s for every error, so an unbindable port - a duplicate
+	 * {@code rtmpPort}, or a port the container is not allowed to bind - produced ~86,000
+	 * ffmpeg fork/exec cycles and ~86,000 WARN lines a day, unattended from boot (the
+	 * keep-alive anchors every RTMP disc at server start, with no player involved). The
+	 * first few attempts stay fast, which is what covers a transient failure or a socket
+	 * still in TIME_WAIT; after that it escalates onto the ladder, capped so the listener
+	 * still recovers on its own once the port frees up. The healthy-streak reset in the
+	 * ingest loop zeroes {@code attempt}, so a working listener never reaches escalation.</p>
 	 */
 	@Override
 	protected long reconnectDelayMillis(long backoffSeconds, boolean idle, long attempt) {
-		return idle ? IDLE_RESPAWN_DELAY_MILLIS : ERROR_RESPAWN_DELAY_MILLIS;
+		if (idle) {
+			return IDLE_RESPAWN_DELAY_MILLIS;
+		}
+		if (attempt <= FAST_ERROR_RETRY_ATTEMPTS) {
+			return ERROR_RESPAWN_DELAY_MILLIS;
+		}
+		return Math.min(MAX_ERROR_RESPAWN_DELAY_MILLIS,
+				Math.max(ERROR_RESPAWN_DELAY_MILLIS, TimeUnit.SECONDS.toMillis(backoffSeconds)));
 	}
 
 	@Override
@@ -160,6 +186,7 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 		if (streamKey != null && !streamKey.isBlank() && out.contains(streamKey)) {
 			out = out.replace(streamKey, "***");
 		}
-		return out;
+		// Then the base pass, so any other URL in the line is masked too.
+		return super.sanitize(out);
 	}
 }

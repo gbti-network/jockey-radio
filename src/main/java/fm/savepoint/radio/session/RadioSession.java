@@ -89,6 +89,8 @@ public final class RadioSession {
 	/** Null for an inert (unknown/deleted disc) session - no feed, no audio. */
 	private final FeedSource source;
 	private final GlobalPos pos;
+	/** Ingest fingerprint of the disc definition this session was built from ("" if none). */
+	private final String fingerprint;
 	private volatile State state = State.SUSPENDED;
 	/**
 	 * sow-012: latched once a repeat-off FINITE source (FILE / non-live VOD) has played to its end.
@@ -138,11 +140,21 @@ public final class RadioSession {
 	 */
 	private int nowPlayingStaleStreak;
 
-	RadioSession(String identity, String label, FeedSource source, GlobalPos pos) {
+	RadioSession(String identity, String label, FeedSource source, GlobalPos pos, String fingerprint) {
 		this.identity = identity;
 		this.label = label;
 		this.source = source;
 		this.pos = pos;
+		this.fingerprint = fingerprint == null ? "" : fingerprint;
+	}
+
+	/**
+	 * The disc definition's ingest fingerprint at the moment this session started. Compared
+	 * against the current definition after a registry edit to decide whether this session
+	 * must be rebuilt against a fresh feed. Empty for a config station or an inert disc.
+	 */
+	String fingerprint() {
+		return fingerprint;
 	}
 
 	/** Server-internal namespaced identity used to tell one disc from another. */

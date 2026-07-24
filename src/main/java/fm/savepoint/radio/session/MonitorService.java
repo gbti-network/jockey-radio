@@ -156,6 +156,23 @@ public final class MonitorService {
 		stopByUuid(admin.getUUID(), "disconnect");
 	}
 
+	/**
+	 * Stops any monitor of {@code discId}. Called before a disc edit/delete reconciles feeds:
+	 * a monitor holds an independent ref on the same {@code disc:<id>} feed key, so without
+	 * this the ref-count could not reach zero and the keep-alive would re-acquire the STALE
+	 * feed (e.g. keeping a rotated RTMP stream key's old listener alive). Server thread.
+	 */
+	public void stopForDisc(String discId) {
+		if (discId == null || monitors.isEmpty()) {
+			return;
+		}
+		for (Map.Entry<UUID, Monitor> entry : new ArrayList<>(monitors.entrySet())) {
+			if (discId.equals(entry.getValue().discId)) {
+				stopByUuid(entry.getKey(), "disc changed");
+			}
+		}
+	}
+
 	/** Stops every monitor - called on SERVER_STOPPING before the feed registry shuts down. */
 	public void stopAll() {
 		if (monitors.isEmpty()) {

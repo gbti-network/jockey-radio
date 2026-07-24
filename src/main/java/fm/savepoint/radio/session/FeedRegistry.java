@@ -1,12 +1,10 @@
 package fm.savepoint.radio.session;
 
 import fm.savepoint.radio.SavePointRadioMod;
+import fm.savepoint.radio.config.HostCapabilityProbe;
 import fm.savepoint.radio.config.RadioConfig;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -191,7 +189,10 @@ public final class FeedRegistry {
 		// Pterodactyl panels, ...) lands WITHOUT the execute bit, and those panels expose no chmod.
 		// The operator has no shell, so if we don't set it for them the binary is unusable and the
 		// error looks identical to "not installed". Only touches a path that actually exists.
-		ensureExecutable(binary);
+		HostCapabilityProbe.ensureExecutable(binary);
+		// Same story for yt-dlp: uploaded 644, and a platform disc would otherwise fail with a
+		// permission error that reads as "yt-dlp is not installed". Cheap and a no-op when unused.
+		HostCapabilityProbe.ensureExecutable(config.ytdlpBinary);
 		String failure = probeFfmpeg(binary);
 		if (failure == null) {
 			useFfmpeg = true;
@@ -203,45 +204,6 @@ public final class FeedRegistry {
 							+ "sessions still track but no audio will stream. Install ffmpeg or set "
 							+ "'ffmpegBinary' in savepoint_radio.json.",
 					binary, failure);
-		}
-	}
-
-	/**
-	 * If {@code binary} names an existing file that is not executable, try to make it so.
-	 *
-	 * <p>Managed Minecraft hosts give the operator a file manager but no shell, and uploads arrive
-	 * non-executable with no way to chmod them from the panel. Without this, "you uploaded ffmpeg but
-	 * it has mode 644" is indistinguishable from "ffmpeg is not installed" — both surface as
-	 * {@code error=13, Permission denied}. Deliberately narrow: a bare command name resolved from
-	 * PATH is left alone (nothing to chmod, and we must not touch a system binary), and every failure
-	 * is non-fatal because {@link #probeFfmpeg} reports the real verdict either way.</p>
-	 */
-	private static void ensureExecutable(String binary) {
-		if (binary == null || binary.isBlank()) {
-			return;
-		}
-		try {
-			Path path = Path.of(binary);
-			// A bare name like "ffmpeg" is a PATH lookup, not a file we own - leave it alone.
-			if (!path.isAbsolute() && path.getNameCount() == 1) {
-				return;
-			}
-			if (!Files.isRegularFile(path) || Files.isExecutable(path)) {
-				return;
-			}
-			File f = path.toFile();
-			boolean ok = f.setExecutable(true, true) || f.setExecutable(true, false);
-			if (ok && Files.isExecutable(path)) {
-				SavePointRadioMod.LOGGER.info(
-						"[radio] set the execute bit on '{}' (uploaded binaries arrive non-executable "
-								+ "on managed hosts)", binary);
-			} else {
-				SavePointRadioMod.LOGGER.warn(
-						"[radio] '{}' exists but is not executable and the execute bit could not be set", binary);
-			}
-		} catch (Throwable t) {
-			// Never fatal - the -version probe below decides the outcome.
-			SavePointRadioMod.LOGGER.debug("[radio] ensureExecutable('{}') skipped: {}", binary, t.toString());
 		}
 	}
 

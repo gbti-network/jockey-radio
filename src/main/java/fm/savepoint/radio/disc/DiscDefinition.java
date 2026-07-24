@@ -167,9 +167,13 @@ public final class DiscDefinition {
 				nameStyle = null;
 			}
 		}
-		if (sourceType == null) {
-			sourceType = SourceType.HLS_PULL;
-		}
+		// sourceType is deliberately NOT defaulted here. An ABSENT key already leaves the
+		// field at its initializer (HLS_PULL), which is the only case that should default.
+		// A PRESENT but unparsable value ("File", "rtmp", a trailing space) deserializes to
+		// null, and coercing that to HLS_PULL silently reclassified the disc: a mistyped
+		// "file" lost -stream_loop/-re and its repeat setting, and a mistyped "platform"
+		// bypassed the enablePlatformLinks gate entirely. Leaving it null lets validate()
+		// reject the entry with an accurate message (that branch was dead until now).
 		if (rtmpBind == null || rtmpBind.isBlank()) {
 			rtmpBind = DEFAULT_RTMP_BIND;
 		}
@@ -200,6 +204,25 @@ public final class DiscDefinition {
 		if (nowPlayingToken != null && nowPlayingToken.isBlank()) {
 			nowPlayingToken = null;
 		}
+	}
+
+	/**
+	 * A compact fingerprint of every field that decides HOW this disc is ingested and
+	 * heard. Two definitions with the same fingerprint produce an equivalent feed.
+	 *
+	 * <p>Used by {@code RadioManager} to tell, after a registry edit, which live sessions
+	 * actually need rebuilding. Without it an edit either restarted every playing disc or
+	 * - as it did before - never reached the running feed at all, so a rotated RTMP stream
+	 * key kept accepting the OLD key until the server restarted.</p>
+	 *
+	 * <p>Excludes every field that does NOT change the ffmpeg command or feed key: the
+	 * colour/base-disc/name-style presentation fields, and the now-playing URL / token /
+	 * template - those last three are re-read live from the registry on every poll and HUD
+	 * sweep, so editing the marquee text must NOT tear down and re-preroll the feed.</p>
+	 */
+	public String ingestFingerprint() {
+		return String.valueOf(sourceType) + '|' + streamUrl + '|' + token + '|' + host + '|' + stationId
+				+ '|' + rtmpBind + '|' + rtmpPort + '|' + streamKey + '|' + repeat + '|' + radiusBlocks;
 	}
 
 	/**

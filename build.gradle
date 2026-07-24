@@ -2,7 +2,11 @@ plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 }
 
-version = project.mod_version
+// Full version = semver + build metadata, e.g. 0.1.0+build.5. Build metadata has no semver
+// precedence (an update check compares 0.1.0 vs 0.1.1, not the build), so each release still
+// bumps patch/minor/major; the build number only makes every built jar individually traceable.
+// build_number defaults to 0 for a plain dev build; `npm run release` bumps it.
+version = "${project.mod_version}+build.${project.build_number}"
 group = project.maven_group
 
 base {
@@ -58,6 +62,34 @@ processResources {
 
 	filesMatching('fabric.mod.json') {
 		expand 'version': project.version
+	}
+
+	// Bundle the platform binaries INTO the jar so a Modrinth drop-in works with no shell and
+	// no manual upload (see BundledBinaries). They live in .product/ (gitignored, ~150 MB), so
+	// they are copied at build time rather than committed. If absent, a THIN jar is built - the
+	// mod still runs and falls back to a configured/PATH ffmpeg. Keep the jar-resource names
+	// (ffmpeg / yt-dlp) in sync with BundledBinaries' resource paths.
+	def productDir = file("${rootDir}/.product")
+	def bundledFfmpeg = file("${productDir}/ffmpeg-linux-amd64-lgpl")
+	def bundledYtdlp = file("${productDir}/yt-dlp-linux")
+	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
+	inputs.files(bundledFfmpeg, bundledYtdlp)
+	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
+		into('savepoint_radio/bin/linux-amd64') {
+			from(bundledFfmpeg) { rename { 'ffmpeg' } }
+			from(bundledYtdlp) { rename { 'yt-dlp' } }
+		}
+		if (bundledNotice.exists()) {
+			into('savepoint_radio') { from(bundledNotice) }
+		}
+		doLast {
+			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp into the jar (~150 MB fat jar).')
+		}
+	} else {
+		doLast {
+			logger.warn('processResources: .product/ binaries not found - building a THIN jar ' +
+					'(no bundled ffmpeg/yt-dlp; the mod will fall back to a configured/PATH binary).')
+		}
 	}
 }
 

@@ -326,7 +326,11 @@ public final class RadioCommands {
 		CommandSourceStack source = ctx.getSource();
 		DiscRegistry.get().reload();
 		int count = DiscRegistry.get().size();
-		source.sendSuccess(() -> Component.literal("Reloaded disc registry: " + count + " disc(s)."), true);
+		String tail = DiscRegistry.get().isReadOnly()
+				? " disc(s) - but " + DiscRegistry.FILE_NAME + " could not be fully read, so SAVING IS DISABLED. "
+						+ "Fix or remove that file, then reload again."
+				: " disc(s).";
+		source.sendSuccess(() -> Component.literal("Reloaded disc registry: " + count + tail), true);
 		return count;
 	}
 

@@ -40,10 +40,13 @@ public final class SavePointRadioMod implements ModInitializer {
 		FeedDiagnostics.init(config);
 		LocalAudioServer.get().start(config.localAudioServerPort);
 		DiscRegistry.get().load();
-		// sow-008: reconcile RTMP idle keep-alive anchors on any disc mutation
-		// (create/edit/delete/reload). A no-op until RtmpKeepAlive is armed after the
-		// startup doctor, so this startup load() does not touch feeds early.
-		DiscRegistry.get().setChangeListener(() -> RtmpKeepAlive.get().onDiscsChanged());
+		// Reconcile everything that depends on the disc set after any mutation
+		// (create/edit/delete/reload): live sessions first, then the sow-008 RTMP
+		// keep-alive anchors. RadioManager owns the ordering because releasing the
+		// sessions' feed references has to happen before the anchors re-acquire, or an
+		// edited disc gets its OLD feed handed straight back. A no-op before the server
+		// is running, so this startup load() does not touch feeds early.
+		DiscRegistry.get().setChangeListener(() -> RadioManager.get().onDiscsChanged());
 		RadioCommands.register();
 		registerSessionLifecycle();
 		LOGGER.info("SavePoint Radio initialized ({} station(s), default station '{}')",

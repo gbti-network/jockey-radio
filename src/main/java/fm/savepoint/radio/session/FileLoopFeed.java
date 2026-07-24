@@ -25,6 +25,12 @@ package fm.savepoint.radio.session;
  */
 public final class FileLoopFeed extends AbstractFfmpegFeed {
 
+	/**
+	 * ffmpeg {@code -rw_timeout} (microseconds): how long a single socket read may stall
+	 * before ffmpeg gives up and exits, handing the connection to the reconnect ladder.
+	 */
+	static final long READ_TIMEOUT_MICROS = 30_000_000L;
+
 	private final String effectiveUrl;
 	private final String displayUrl;
 	/** sow-012: loop the file forever (true) or play it once and stop (false). */
@@ -40,12 +46,22 @@ public final class FileLoopFeed extends AbstractFfmpegFeed {
 		this.effectiveUrl = endpoint.effectiveUrl();
 		this.displayUrl = endpoint.displayUrl();
 		this.repeat = repeat;
+		// A FILE disc's URL is routinely a presigned/tokened CDN link. Without this the
+		// base sanitize has nothing to swap the display form in for, and the tokened URL
+		// reaches the reconnect WARN line and the /radiodisc diag arg-shape verbatim.
+		redactEndpoint(endpoint);
 	}
 
 	@Override
 	protected String[] buildCommand() {
 		java.util.List<String> cmd = new java.util.ArrayList<>(java.util.List.of(
 				ffmpegBinary, "-nostdin", "-hide_banner", "-loglevel", "warning",
+				// Give up on a socket that stops delivering (microseconds). Without it a
+				// half-open connection - a NAT/LB silently dropping state, an origin that
+				// accepts then stalls - leaves ffmpeg blocked in recv() forever: alive, so
+				// the ingest loop never reaches its reconnect ladder and the disc is silent
+				// with no error. Far longer than any healthy read, so -re pacing is unaffected.
+				"-rw_timeout", String.valueOf(READ_TIMEOUT_MICROS),
 				// -re paces the read to real-time (INPUT option) - without it ffmpeg races the
 				// whole file into the jitter buffer and overflows it.
 				"-re"));

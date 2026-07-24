@@ -84,6 +84,17 @@ class YtDlpResolveTest {
 		}
 
 		@Test
+		@DisplayName("bounds a stalled socket so the child self-limits")
+		void passesSocketTimeout() {
+			List<String> argv = Arrays.asList(YtDlpResolve.argv("yt-dlp", "https://example.test/x"));
+			int idx = argv.indexOf("--socket-timeout");
+			assertAll(
+					() -> assertTrue(idx >= 0, "--socket-timeout must be passed: " + argv),
+					() -> assertEquals(YtDlpResolve.SOCKET_TIMEOUT_SECONDS, argv.get(idx + 1),
+							"the timeout value must follow the flag"));
+		}
+
+		@Test
 		@DisplayName("honours a custom binary path (operator-supplied yt-dlp)")
 		void honoursCustomBinary() {
 			assertEquals("/opt/bin/yt-dlp", YtDlpResolve.argv("/opt/bin/yt-dlp", "https://x.test")[0]);

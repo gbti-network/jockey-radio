@@ -62,18 +62,29 @@ public final class HostCapabilityProbe {
 				execDetail = r[1];
 			}
 
+			// Repair the exec bit BEFORE probing. A binary uploaded through a panel arrives
+			// mode 644, and an EACCES spawn is otherwise reported as "not found" - sending the
+			// operator off to reinstall a binary that is sitting right there. This is also
+			// what the startup doctor does later, so the boot log no longer contradicts itself.
+			ensureExecutable(RadioConfig.get().ffmpegBinary);
+			ensureExecutable(RadioConfig.get().ytdlpBinary);
+
 			// ffmpeg uses -version; yt-dlp uses --version. Passing the wrong one exits non-zero and
 			// reads as "broken" when the tool is actually fine.
-			String ffmpeg = whichVersion(RadioConfig.get().ffmpegBinary, "-version");
-			String ytdlp = whichVersion(RadioConfig.get().ytdlpBinary, "--version");
+			Tool ffmpeg = whichVersion(RadioConfig.get().ffmpegBinary, "-version");
+			Tool ytdlp = whichVersion(RadioConfig.get().ytdlpBinary, "--version");
 
 			SavePointRadioMod.LOGGER.info("[radio] ---- host capability probe ----");
 			SavePointRadioMod.LOGGER.info("[radio] host os={} arch={} java={}", os, arch, java);
 			SavePointRadioMod.LOGGER.info("[radio] host spawn-process={} extracted-binary-executable={} ({})",
 					canSpawn, canExec, execDetail);
-			SavePointRadioMod.LOGGER.info("[radio] host ffmpeg={}", ffmpeg);
-			SavePointRadioMod.LOGGER.info("[radio] host yt-dlp={}", ytdlp);
+			SavePointRadioMod.LOGGER.info("[radio] host ffmpeg={}", ffmpeg.detail());
+			SavePointRadioMod.LOGGER.info("[radio] host yt-dlp={}", ytdlp.detail());
 
+			// Branch on the SUCCESS marker, never on "is it the missing string". The old chain
+			// tested ffmpeg.startsWith("missing"), so "exit=126 ...", "timed out", "unavailable"
+			// and "not configured" all fell through to "fully supported" while the startup
+			// doctor logged the opposite and the mod quietly ran on stub feeds.
 			if (canSpawn != Verdict.YES) {
 				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: this host BLOCKS process spawning - "
 						+ "no audio source can work here, bundled binaries would not help.");
@@ -81,12 +92,19 @@ public final class HostCapabilityProbe {
 				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: processes spawn, but a binary written "
 						+ "into the server directory CANNOT be executed (noexec or equivalent). Shipping "
 						+ "bundled binaries will NOT work on this host; ffmpeg must already be on PATH.");
-			} else if (canExec == Verdict.YES && ffmpeg.startsWith("missing")) {
-				SavePointRadioMod.LOGGER.info("[radio] host VERDICT: extracted binaries ARE executable here - "
-						+ "bundling ffmpeg/yt-dlp is viable. ffmpeg is not installed, which bundling would fix.");
-			} else if (canExec == Verdict.YES) {
+			} else if (canExec == Verdict.UNKNOWN) {
+				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: INCONCLUSIVE - the exec probe did not "
+						+ "finish ({}), so whether a bundled binary can run here is unknown.", execDetail);
+			} else if (ffmpeg.ok()) {
 				SavePointRadioMod.LOGGER.info("[radio] host VERDICT: extracted binaries are executable and "
 						+ "ffmpeg is present - this host is fully supported.");
+			} else if (ffmpeg.missing()) {
+				SavePointRadioMod.LOGGER.info("[radio] host VERDICT: extracted binaries ARE executable here - "
+						+ "bundling ffmpeg/yt-dlp is viable. ffmpeg is not installed, which bundling would fix.");
+			} else {
+				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: extracted binaries are executable, but "
+						+ "ffmpeg did not answer -version ({}) - feeds will fall back to stubs until this is "
+						+ "resolved.", ffmpeg.detail());
 			}
 			SavePointRadioMod.LOGGER.info("[radio] --------------------------------");
 		} catch (Throwable t) {
@@ -148,13 +166,16 @@ public final class HostCapabilityProbe {
 			Process p = new ProcessBuilder(probe.toAbsolutePath().toString())
 					.redirectErrorStream(true)
 					.start();
-			String out;
-			try (InputStream in = p.getInputStream()) {
-				out = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
-			}
+			// waitFor before reading, for the same reason as whichVersion: draining the pipe
+			// first put the 10 s timeout out of reach, and this runs on the bootstrap thread
+			// during onInitialize, so a child holding stdout open would hang server startup.
 			if (!p.waitFor(10, TimeUnit.SECONDS)) {
 				p.destroyForcibly();
 				return new String[] { "UNKNOWN", "probe timed out" };
+			}
+			String out;
+			try (InputStream in = p.getInputStream()) {
+				out = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
 			}
 			if (p.exitValue() == 0 && out.contains("savepoint-exec-ok")) {
 				return new String[] { "YES", "wrote, chmod +x and ran a file in the config dir" };
@@ -197,31 +218,93 @@ public final class HostCapabilityProbe {
 		}
 	}
 
-	/** {@code <binary> <versionFlag>} → a short version string, or why it could not be run. */
-	private static String whichVersion(String binary, String versionFlag) {
+	/**
+	 * One tool's probe outcome. {@code ok} is the ONLY success signal; {@code missing} means
+	 * the file genuinely is not there (as opposed to present-but-unrunnable), which is the
+	 * distinction the bundling verdict turns on.
+	 */
+	private record Tool(boolean ok, boolean missing, String detail) {
+	}
+
+	/** {@code <binary> <versionFlag>} → the outcome, with a short version string or the reason. */
+	private static Tool whichVersion(String binary, String versionFlag) {
 		if (binary == null || binary.isBlank()) {
-			return "not configured";
+			return new Tool(false, false, "not configured");
 		}
 		Process p = null;
 		try {
 			p = new ProcessBuilder(binary, versionFlag).redirectErrorStream(true).start();
+			// waitFor FIRST, then read. Reading to EOF first meant the 10 s timeout could never
+			// fire while the pipe was open, so a wrapper script that backgrounds a helper (the
+			// grandchild inherits the pipe) blocked mod init forever. A -version banner is a few
+			// KB - far inside the 64 KB pipe buffer - so waiting first cannot deadlock.
+			if (!p.waitFor(10, TimeUnit.SECONDS)) {
+				p.destroyForcibly();
+				return new Tool(false, false, "timed out after 10s");
+			}
 			String out;
 			try (InputStream in = p.getInputStream()) {
 				out = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			}
-			if (!p.waitFor(10, TimeUnit.SECONDS)) {
-				return "timed out";
-			}
 			String first = out.isBlank() ? "(no output)" : out.lines().findFirst().orElse("(no output)").trim();
-			return p.exitValue() == 0 ? "OK - " + trim(first) : "exit=" + p.exitValue() + " " + trim(first);
+			return p.exitValue() == 0
+					? new Tool(true, false, "OK - " + trim(first))
+					: new Tool(false, false, "exit=" + p.exitValue() + " " + trim(first));
 		} catch (IOException e) {
-			return "missing ('" + binary + "' not found on this host)";
+			// EACCES is NOT "missing": the file is right there, it just has no exec bit. Saying
+			// "not found" here is what sent operators off to re-upload a binary that was fine.
+			String m = String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT);
+			if (m.contains("permission denied") || m.contains("error=13")) {
+				return new Tool(false, false, "present but NOT EXECUTABLE ('" + binary
+						+ "' is mode 644?) - the mod tried to set the execute bit and could not");
+			}
+			return new Tool(false, true, "missing ('" + binary + "' not found on this host)");
 		} catch (Throwable t) {
-			return "unavailable: " + t.getClass().getSimpleName();
+			return new Tool(false, false, "unavailable: " + t.getClass().getSimpleName());
 		} finally {
 			if (p != null) {
 				p.destroyForcibly();
 			}
+		}
+	}
+
+	/**
+	 * If {@code binary} names an existing file that is not executable, try to make it so.
+	 *
+	 * <p>Managed Minecraft hosts give the operator a file manager but no shell, and uploads
+	 * arrive non-executable with no way to chmod them from the panel. Without this, "you
+	 * uploaded ffmpeg but it has mode 644" is indistinguishable from "ffmpeg is not
+	 * installed" - both surface as {@code error=13, Permission denied}. Deliberately narrow:
+	 * a bare command name resolved from PATH is left alone (nothing to chmod, and we must
+	 * not touch a system binary), and every failure is non-fatal because the caller's
+	 * {@code -version} probe reports the real verdict either way.</p>
+	 */
+	public static void ensureExecutable(String binary) {
+		if (binary == null || binary.isBlank()) {
+			return;
+		}
+		try {
+			Path path = Path.of(binary);
+			// A bare name like "ffmpeg" is a PATH lookup, not a file we own - leave it alone.
+			if (!path.isAbsolute() && path.getNameCount() == 1) {
+				return;
+			}
+			if (!Files.isRegularFile(path) || Files.isExecutable(path)) {
+				return;
+			}
+			File f = path.toFile();
+			boolean ok = f.setExecutable(true, true) || f.setExecutable(true, false);
+			if (ok && Files.isExecutable(path)) {
+				SavePointRadioMod.LOGGER.info(
+						"[radio] set the execute bit on '{}' (uploaded binaries arrive non-executable "
+								+ "on managed hosts)", binary);
+			} else {
+				SavePointRadioMod.LOGGER.warn(
+						"[radio] '{}' exists but is not executable and the execute bit could not be set", binary);
+			}
+		} catch (Throwable t) {
+			// Never fatal - the -version probe decides the outcome.
+			SavePointRadioMod.LOGGER.debug("[radio] ensureExecutable('{}') skipped: {}", binary, t.toString());
 		}
 	}
 

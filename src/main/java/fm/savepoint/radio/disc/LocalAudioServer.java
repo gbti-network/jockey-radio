@@ -81,7 +81,15 @@ public final class LocalAudioServer {
 			HttpServer s = HttpServer.create(
 					new InetSocketAddress(InetAddress.getLoopbackAddress(), configuredPort), 0);
 			s.createContext("/audio/", this::handle);
-			s.setExecutor(Executors.newFixedThreadPool(2, r -> {
+			// A cached pool, NOT a fixed one. Every request here is a long-lived streaming
+			// response: FileLoopFeed passes ffmpeg -re, so the handler blocks inside write()
+			// at the media clock for as long as the disc plays. A fixed pool of N therefore
+			// caps CONCURRENT FILE DISCS at N, and the overflow does not fail - it sits in the
+			// executor's unbounded queue, so ffmpeg waits forever for response headers, the
+			// ingest loop never reconnects, and the disc is silent with nothing logged.
+			// One thread per playing file disc is the correct sizing, and the pool reaps
+			// idle threads after 60 s.
+			s.setExecutor(Executors.newCachedThreadPool(r -> {
 				Thread t = new Thread(r, "savepoint-audio-http");
 				t.setDaemon(true);
 				return t;
@@ -119,9 +127,16 @@ public final class LocalAudioServer {
 			return List.of();
 		}
 		try (var stream = Files.list(root)) {
-			return stream.filter(Files::isRegularFile)
+			return stream
+					// NOFOLLOW so a symlink is not listed: resolve()'s toRealPath child-of-root
+					// check rejects one, and listing it would recreate the exact silent-404 the
+					// shared name predicate below closes for ordinary files.
+					.filter(p -> Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS))
 					.map(p -> p.getFileName().toString())
-					.filter(LocalAudioServer::hasAudioExt)
+					// Same predicate resolve() uses, so the Browse dialog can never offer a file
+					// the server would then refuse (a disc saved from such an entry 404s on every
+					// play, silently, with nothing in the UI or the log to explain it).
+					.filter(LocalAudioServer::isServableName)
 					.sorted(String.CASE_INSENSITIVE_ORDER)
 					.toList();
 		} catch (Throwable t) {
@@ -232,9 +247,7 @@ public final class LocalAudioServer {
 			return null;
 		}
 		String name = decoded.substring(prefix.length());
-		// Reject anything that is not a bare file name in the folder.
-		if (name.isEmpty() || name.contains("/") || name.contains("\\") || name.contains("..")
-				|| !hasAudioExt(name)) {
+		if (!isServableName(name)) {
 			return null;
 		}
 		try {
@@ -246,6 +259,22 @@ public final class LocalAudioServer {
 		} catch (Throwable t) {
 			return null;
 		}
+	}
+
+	/**
+	 * Whether {@code name} is a bare, allowed audio file name this server will serve. The
+	 * single predicate behind BOTH {@link #listAudioFiles()} and {@link #resolve(String)},
+	 * so the Browse dialog and the server can never disagree about what exists.
+	 *
+	 * <p>Traversal is refused by the separator check plus {@link #resolve}'s post-
+	 * {@code toRealPath} check that the file is a direct child of the root. A {@code ..}
+	 * SUBSTRING is deliberately not refused: it cannot escape anything without a separator,
+	 * and refusing it only made ordinary names like {@code set1..mp3} unplayable.</p>
+	 */
+	private static boolean isServableName(String name) {
+		return name != null && !name.isEmpty()
+				&& !name.contains("/") && !name.contains("\\")
+				&& hasAudioExt(name);
 	}
 
 	private static String contentType(Path file) {

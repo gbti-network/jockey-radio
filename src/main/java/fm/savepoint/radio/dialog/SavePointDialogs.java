@@ -42,8 +42,10 @@ import net.minecraft.world.item.ItemStackTemplate;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Pure factory of vanilla {@link Dialog} objects for the {@code /savepoint}
@@ -360,7 +362,7 @@ public final class SavePointDialogs {
 		// its payload too (they are button state, not form inputs), so the whole in-progress disc
 		// survives the browse round-trip instead of coming back blank.
 		List<ActionButton> actions = List.of(
-				browseAudioButton(currentColor, currentStyle, currentNameStyle),
+				browseAudioButton(currentColor, currentStyle, currentNameStyle, editId),
 				cycle, style, nameStyle, submit,
 				navButton(Lang.tr("savepoint_radio.button.back", "Back"), edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
@@ -490,7 +492,12 @@ public final class SavePointDialogs {
 				text(Lang.tr("savepoint_radio.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
-		String portInitial = values.map(d -> d.rtmpPort).filter(p -> p > 0).map(String::valueOf).orElse(DEFAULT_RTMP_PORT);
+		// Seed the next FREE port, not a constant. Seeding 1936 every time meant a second
+		// RTMP disc created through the UI silently collided with the first: it saved fine,
+		// showed a copyable ingest URL, and then never bound (the keep-alive respawned it
+		// against an in-use port), so the DJ's OBS was refused with nothing explaining why.
+		String portInitial = values.map(d -> d.rtmpPort).filter(p -> p > 0).map(String::valueOf)
+				.orElseGet(SavePointDialogs::nextFreeRtmpPort);
 		inputs.add(new Input("rtmp_port",
 				text(Lang.tr("savepoint_radio.input.rtmp_port", "RTMP port (1024..65535)"), portInitial, 5)));
 		// Fresh create seeds a random key; a Preview round-trip carries the admin's
@@ -864,6 +871,22 @@ public final class SavePointDialogs {
 		return noticeThenNav(error(title), Component.literal(message), navTo, navId);
 	}
 
+	/**
+	 * A red error notice whose OK button REBUILDS the form the admin was filling in, with
+	 * every submitted value intact.
+	 *
+	 * <p>A save-validation error used to send the admin to a bare {@code create_*} nav, so
+	 * a single bad character in the disc id blanked the entire form - and on an RTMP form
+	 * that also generated a NEW stream key, invalidating the one already handed to the
+	 * broadcaster. The notice has no inputs of its own, so the submitted payload rides in
+	 * the OK button exactly as the audio-browse round trip carries its values.</p>
+	 */
+	public static Dialog errorThenForm(String title, String message, CompoundTag submitted) {
+		CommonDialogData common = commonNone(error(title), List.of(body(Component.literal(message))), List.of());
+		return new NoticeDialog(common, carryNavButton(
+				Lang.tr("savepoint_radio.button.back_to_form", "Back to form"), "form_back", null, 150, submitted));
+	}
+
 	/** A test-result notice returning to the disc's detail page. */
 	public static Dialog noticeThenDetail(String title, String message, String discId) {
 		return noticeThenNav(Component.literal(title), Component.literal(message), "detail", discId);
@@ -1105,12 +1128,24 @@ public final class SavePointDialogs {
 
 	private static SingleOptionInput bindInput(String selected) {
 		boolean any = "0.0.0.0".equals(selected);
-		List<SingleOptionInput.Entry> entries = List.of(
-				new SingleOptionInput.Entry("127.0.0.1",
-						Optional.of(Component.literal("127.0.0.1 (local only)")), !any),
-				new SingleOptionInput.Entry("0.0.0.0",
-						Optional.of(Component.literal("0.0.0.0 (all interfaces)")), any));
-		return new SingleOptionInput(220, entries, Lang.tr("savepoint_radio.input.rtmp_bind", "RTMP bind"), true);
+		boolean loopback = selected == null || selected.isBlank() || "127.0.0.1".equals(selected);
+		// A hand-authored disc may bind a concrete interface (e.g. 10.0.0.5), which the rest
+		// of the mod fully supports. Offering only the two well-known binds meant such a value
+		// was not shown, could not be re-selected, and was silently rewritten to loopback by
+		// the next edit - killing remote ingest with no warning. So an off-list bind is added
+		// as a third entry and pre-selected, exactly as an off-palette colour and an off-list
+		// base disc already round-trip on these forms.
+		List<SingleOptionInput.Entry> entries = new ArrayList<>();
+		if (!any && !loopback) {
+			entries.add(new SingleOptionInput.Entry(selected,
+					Optional.of(Component.literal(selected + " (custom)")), true));
+		}
+		entries.add(new SingleOptionInput.Entry("127.0.0.1",
+				Optional.of(Component.literal("127.0.0.1 (local only)")), loopback));
+		entries.add(new SingleOptionInput.Entry("0.0.0.0",
+				Optional.of(Component.literal("0.0.0.0 (all interfaces)")), any));
+		return new SingleOptionInput(220, List.copyOf(entries),
+				Lang.tr("savepoint_radio.input.rtmp_bind", "RTMP bind"), true);
 	}
 
 	/**
@@ -1154,9 +1189,15 @@ public final class SavePointDialogs {
 	 * input is submitted) whose payload also carries the colour / base disc / name style - those are
 	 * button state rather than form inputs, so they would otherwise be lost across the browse trip.
 	 */
-	private static ActionButton browseAudioButton(String nameColorHex, String baseDisc, String nameStyle) {
+	private static ActionButton browseAudioButton(String nameColorHex, String baseDisc, String nameStyle,
+			String editId) {
 		CompoundTag additions = new CompoundTag();
 		additions.putString("to", "browse_audio");
+		// The edit id has to ride along like every other form button carries it. Without it,
+		// browsing (or cancelling the browse) while EDITING a file disc came back as a blank
+		// CREATE form: the id input reappeared empty, and saving either collided with the
+		// existing disc or silently created a second one while the original kept its old URL.
+		additions.putString("edit", editId == null ? "" : editId);
 		additions.putString("name_color", nameColorHex == null || nameColorHex.isBlank() ? DEFAULT_COLOR : nameColorHex);
 		additions.putString("base_disc",
 				baseDisc == null || baseDisc.isBlank() ? DiscDefinition.DEFAULT_BASE_DISC : baseDisc);
@@ -1387,6 +1428,26 @@ public final class SavePointDialogs {
 			sb.append(KEY_ALPHABET[RANDOM.nextInt(KEY_ALPHABET.length)]);
 		}
 		return sb.toString();
+	}
+
+	/**
+	 * The lowest RTMP port at or above {@link #DEFAULT_RTMP_PORT} that no saved
+	 * {@code rtmp_receive} disc already claims, so the create form never pre-fills a port
+	 * that is guaranteed to collide. Only a suggestion - {@link DiscRegistry#put} is what
+	 * actually enforces uniqueness, since the admin can still type any port.
+	 */
+	private static String nextFreeRtmpPort() {
+		Set<Integer> taken = new HashSet<>();
+		for (DiscDefinition d : DiscRegistry.get().list()) {
+			if (d.sourceType == DiscDefinition.SourceType.RTMP_RECEIVE && d.rtmpPort > 0) {
+				taken.add(d.rtmpPort);
+			}
+		}
+		int port = Integer.parseInt(DEFAULT_RTMP_PORT);
+		while (port < 65535 && taken.contains(port)) {
+			port++;
+		}
+		return String.valueOf(port);
 	}
 
 	/** Parses {@code #RRGGBB} to a packed RGB int, or returns {@code fallback}. */

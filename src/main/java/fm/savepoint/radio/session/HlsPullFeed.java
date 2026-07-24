@@ -3,7 +3,6 @@ package fm.savepoint.radio.session;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 /**
  * HLS-pull feed: ffmpeg fetches a SavePoint trunk playlist and decodes it to
@@ -13,19 +12,13 @@ import java.util.regex.Pattern;
  *
  * <p>An idle station answers the playlist with HTTP 404 (per SavePoint
  * semantics), so a 404 in stderr classifies the ended connection as idle
- * rather than an error. The access token must never reach the logs: the
- * effective URL is rewritten to its display form, the literal encoded token
- * becomes {@code ***}, and any leftover {@code token=} query value (segment /
- * variant URLs inherit the query) is redacted by pattern.</p>
+ * rather than an error. The access token must never reach the logs; that is
+ * handled by {@link AbstractFfmpegFeed#redactEndpoint} in the constructor, which
+ * rewrites the effective URL to its display form, blanks the literal encoded
+ * token, and masks the query values of any leftover URL (segment / variant URLs
+ * inherit the playlist's query string).</p>
  */
 public final class HlsPullFeed extends AbstractFfmpegFeed {
-
-	/**
-	 * Defensive redaction of any {@code token=} query value (segment/variant
-	 * URLs inherit the playlist's query string). The exact configured token is
-	 * additionally replaced literally in {@link #sanitize(String)}.
-	 */
-	private static final Pattern TOKEN_QUERY_PATTERN = Pattern.compile("([?&]token=)[^&\\s'\"]+");
 
 	/**
 	 * HLS reconnect ladder (sow-005 Phase A, item 3; the dev's Discord-proven values):
@@ -51,8 +44,6 @@ public final class HlsPullFeed extends AbstractFfmpegFeed {
 
 	private final String effectiveUrl;
 	private final String displayUrl;
-	/** Encoded token embedded in {@link #effectiveUrl}; null when none. */
-	private final String secret;
 	/**
 	 * How many HLS segments behind the live edge ffmpeg starts on connect
 	 * ({@code -live_start_index -<N>}, sow-005 Phase A, item 1). {@code > 0} grabs the
@@ -74,14 +65,21 @@ public final class HlsPullFeed extends AbstractFfmpegFeed {
 				smoothingMode, maxStretchPercent);
 		this.effectiveUrl = endpoint.effectiveUrl();
 		this.displayUrl = endpoint.displayUrl();
-		this.secret = endpoint.secret();
+		redactEndpoint(endpoint);
 		this.startBehindSegments = Math.max(0, startBehindSegments);
 	}
 
 	@Override
 	protected String[] buildCommand() {
 		List<String> cmd = new ArrayList<>(List.of(
-				ffmpegBinary, "-nostdin", "-hide_banner", "-loglevel", "warning"));
+				ffmpegBinary, "-nostdin", "-hide_banner", "-loglevel", "warning",
+				// Give up on a socket that stops delivering (microseconds). A half-open
+				// connection - a NAT/LB dropping state, an origin that accepts then stalls
+				// mid-segment - otherwise leaves ffmpeg blocked in recv() indefinitely: the
+				// process stays ALIVE, so the ingest loop never ends the connection and never
+				// reaches the reconnect ladder below. The station then reads state=streaming
+				// in diag while nothing is audible. 30 s is far beyond a healthy segment fetch.
+				"-rw_timeout", String.valueOf(FileLoopFeed.READ_TIMEOUT_MICROS)));
 		// START-BEHIND (sow-005 Phase A, item 1): an HLS demuxer INPUT option (must
 		// precede -i). -live_start_index -<N> makes ffmpeg begin N segments behind the
 		// live edge, grabbing the retained backlog on connect so the deep jitter buffer
@@ -202,20 +200,4 @@ public final class HlsPullFeed extends AbstractFfmpegFeed {
 		return line.contains("Server returned 404") || line.contains("HTTP error 404");
 	}
 
-	@Override
-	protected String sanitize(String line) {
-		// The exact-token replacements only apply when a token is known, but the
-		// defensive token= pattern must run ALWAYS: a config-station URL can carry
-		// a token inline with no separate token field (secret left null), and any
-		// stderr line echoing that URL would otherwise leak it unredacted.
-		if (secret != null) {
-			if (line.contains(effectiveUrl)) {
-				line = line.replace(effectiveUrl, displayUrl);
-			}
-			if (line.contains(secret)) {
-				line = line.replace(secret, "***");
-			}
-		}
-		return TOKEN_QUERY_PATTERN.matcher(line).replaceAll("$1***");
-	}
 }

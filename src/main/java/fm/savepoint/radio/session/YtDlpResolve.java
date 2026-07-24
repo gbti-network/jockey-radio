@@ -70,6 +70,14 @@ public final class YtDlpResolve {
 	}
 
 	/**
+	 * Per-socket timeout (seconds) handed to yt-dlp. This is defence in depth, not the real
+	 * bound: it caps a single stalled socket operation, while the caller's watchdog is what
+	 * caps the whole extraction (yt-dlp issues many requests, and DNS resolution is not
+	 * covered by a socket timeout at all).
+	 */
+	public static final String SOCKET_TIMEOUT_SECONDS = "15";
+
+	/**
 	 * The yt-dlp argv. Never a shell: the page URL is a separate argument and the trailing {@code --}
 	 * ends option parsing, so a URL beginning with {@code -} cannot be read as a flag.
 	 */
@@ -77,6 +85,7 @@ public final class YtDlpResolve {
 		return new String[] {
 				ytdlpBinary, "-f", FORMAT_SELECTOR, "--no-playlist",
 				"--no-warnings", "--quiet",
+				"--socket-timeout", SOCKET_TIMEOUT_SECONDS,
 				"--print", "URL=%(urls)s",
 				"--print", "LIVE=%(is_live)s",
 				"--print", "ABR=%(abr)s",

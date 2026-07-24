@@ -143,11 +143,13 @@ public final class RadioConfig {
 	/** Lower bound for a sane music bitrate. */
 	private static final int MIN_OPUS_BITRATE = 24_000;
 	/**
-	 * Upper bound kept MTU-safe. An SVC voice packet must fit ~1275 bytes; a 20 ms
-	 * frame carries {@code bitrate/50/8} bytes, so the theoretical ceiling is
-	 * ~510 kbit/s. We cap at 490 kbit/s (~1225 bytes/frame worst case) for margin.
+	 * Upper bound, set by what the ENCODER will actually honour. Concentus hard-caps
+	 * {@code setBitrate} at 300 kbit/s mono, so a higher value was accepted here, passed
+	 * on, and silently reduced - the knob did nothing above 300 kbit/s and no log line
+	 * said so. Clamping at the real ceiling makes the accepted range truthful. (The
+	 * MTU-derived ceiling is higher, ~510 kbit/s, but it is never the binding one.)
 	 */
-	private static final int MAX_OPUS_BITRATE = 490_000;
+	private static final int MAX_OPUS_BITRATE = 300_000;
 
 	/**
 	 * Default Opus encode complexity: mid-scale, so the pure-Java encoder stays
@@ -187,6 +189,15 @@ public final class RadioConfig {
 	/** ffmpeg executable: bare name resolved via PATH, or an absolute path. */
 	public String ffmpegBinary = "ffmpeg";
 	/**
+	 * Whether to install the ffmpeg/yt-dlp binaries bundled in the jar on first run and use
+	 * them automatically (<b>default {@code true}</b>). See {@link BundledBinaries}: on
+	 * linux/amd64 the binaries are extracted to {@code <configDir>/savepoint_radio/bin/},
+	 * chmod +x, and used ONLY while {@link #ffmpegBinary}/{@link #ytdlpBinary} are their default
+	 * bare names - an explicit path always wins. Set this {@code false} to force the configured
+	 * value / PATH even on a bundled build (e.g. to use a system ffmpeg you trust).
+	 */
+	public boolean useBundledBinaries = true;
+	/**
 	 * sow-007: yt-dlp executable for PLATFORM discs (bare name via PATH, or an absolute
 	 * path). Resolves a YouTube/SoundCloud/Mixcloud/Twitch/Kick page URL to an audio
 	 * stream. Only consulted by PLATFORM discs; if it is missing/outdated those discs
@@ -222,13 +233,15 @@ public final class RadioConfig {
 	/**
 	 * Steady-state playout latency in seconds (jitter-buffer target). Nullable so
 	 * a pre-jitter file (key absent) can be told from an explicit value; absent
-	 * uses {@link #DEFAULT_TARGET_BUFFER_SECONDS}. Clamped 0.5..30 on load.
+	 * uses {@link #DEFAULT_TARGET_BUFFER_SECONDS}. Clamped
+	 * {@value #MIN_TARGET_BUFFER_SECONDS}..{@value #MAX_TARGET_BUFFER_SECONDS} on load.
 	 */
 	public Double targetBufferSeconds;
 	/**
 	 * Hard cap on buffered audio in seconds (memory bound; absorbs an upstream
 	 * reconnect flood). Nullable; absent uses {@link #DEFAULT_MAX_BUFFER_SECONDS}
-	 * (or a migrated {@code bufferFrames}). Clamped {@code targetBufferSeconds}..60.
+	 * (or a migrated {@code bufferFrames}). Clamped {@code targetBufferSeconds}..{@value
+	 * #MAX_MAX_BUFFER_SECONDS}.
 	 *
 	 * <p>Keep this ABOVE the target with headroom (aim for ~2x
 	 * {@code targetBufferSeconds}): the high-water hysteresis trim doubles as the
@@ -502,11 +515,11 @@ public final class RadioConfig {
 	/**
 	 * Target bitrate (bits/s) for {@link #opusHighQuality}. Default
 	 * {@value #DEFAULT_OPUS_BITRATE} (128 kbit/s mono ≈ 320 bytes/20 ms frame).
-	 * Clamped to {@value #MIN_OPUS_BITRATE}..{@value #MAX_OPUS_BITRATE} on load with
-	 * a warning: the upper bound stays under the ~1275-byte SVC packet MTU (a 20 ms
-	 * frame is {@code bitrate/50/8} bytes, so the hard ceiling is ~510 kbit/s).
-	 * Ignored when {@link #opusHighQuality} is {@code false}. Pre-key files load with
-	 * the default.
+	 * Clamped to {@value #MIN_OPUS_BITRATE}..{@value #MAX_OPUS_BITRATE} on load with a
+	 * warning. The upper bound is the encoder's own ceiling (Concentus caps at 300 kbit/s
+	 * mono); it also stays well under the ~1275-byte SVC packet MTU, since a 20 ms frame
+	 * is {@code bitrate/50/8} bytes. Ignored when {@link #opusHighQuality} is
+	 * {@code false}. Pre-key files load with the default.
 	 */
 	public int opusBitrate = DEFAULT_OPUS_BITRATE;
 	/**
@@ -642,6 +655,8 @@ public final class RadioConfig {
 				SavePointRadioMod.LOGGER.error("Failed to write default config to {}", path, e);
 			}
 			instance = defaults;
+			// First-run install of the jar-bundled binaries so a zero-touch drop-in works.
+			BundledBinaries.installAndResolve(instance, path.getParent());
 			return instance;
 		}
 
@@ -685,6 +700,9 @@ public final class RadioConfig {
 					"Malformed config at {} - using built-in defaults (file left untouched)", path, e);
 			instance = createDefault();
 		}
+		// Install/resolve the jar-bundled binaries and point ffmpegBinary/ytdlpBinary at them
+		// when left at their defaults (in-memory only, so the on-disk file stays portable).
+		BundledBinaries.installAndResolve(instance, path.getParent());
 		return instance;
 	}
 
@@ -737,14 +755,19 @@ public final class RadioConfig {
 					loaded.adminPermissionLevel, FILE_NAME);
 			loaded.adminPermissionLevel = 3;
 		}
-		// 0 = disabled (default). A positive interval must not busy-poll (min 5s)
-		// nor be so long it never fires usefully; clamp the rest into 5..3600.
-		if (loaded.nowPlayingPollSeconds != 0
-				&& (loaded.nowPlayingPollSeconds < 5 || loaded.nowPlayingPollSeconds > 3600)) {
-			SavePointRadioMod.LOGGER.warn(
-					"nowPlayingPollSeconds {} in {} is outside 0 (disabled) or 5..3600 - disabling",
-					loaded.nowPlayingPollSeconds, FILE_NAME);
+		// 0 or negative = disabled. A POSITIVE out-of-range value is clamped into 5..3600
+		// like every neighbouring knob, rather than silently turning the feature off: an
+		// operator who set 3 hoping for faster track updates got no poller at all, no
+		// "now-playing poller enabled" line, and no track title for the whole run.
+		if (loaded.nowPlayingPollSeconds < 0) {
 			loaded.nowPlayingPollSeconds = 0;
+		} else if (loaded.nowPlayingPollSeconds != 0
+				&& (loaded.nowPlayingPollSeconds < 5 || loaded.nowPlayingPollSeconds > 3600)) {
+			int clamped = Math.max(5, Math.min(3600, loaded.nowPlayingPollSeconds));
+			SavePointRadioMod.LOGGER.warn(
+					"nowPlayingPollSeconds {} in {} is outside 5..3600 (0 disables) - using {}",
+					loaded.nowPlayingPollSeconds, FILE_NAME, clamped);
+			loaded.nowPlayingPollSeconds = clamped;
 		}
 		if (loaded.monitorSeconds < 10 || loaded.monitorSeconds > 600) {
 			SavePointRadioMod.LOGGER.warn(
@@ -790,15 +813,17 @@ public final class RadioConfig {
 				loaded.rtmpPublicHost = host;
 			}
 		}
-		// High-quality Opus bitrate: clamp MTU-safe (24k..490k) with a warning. The
-		// upper bound keeps a 20 ms frame under the ~1275-byte / ~510 kbit/s packet
-		// ceiling. Only consulted when opusHighQuality is on, but clamp regardless so
-		// a later toggle stays safe. Pre-key files arrive with the field default.
+		// High-quality Opus bitrate: clamp to what the encoder will honour, with a warning.
+		// The ceiling is Concentus's own 300 kbit/s mono cap, not the MTU - above it the
+		// library silently reduced the value, so the knob read as effective when it was not.
+		// Only consulted when opusHighQuality is on, but clamp regardless so a later toggle
+		// stays safe. Pre-key files arrive with the field default.
 		if (loaded.opusBitrate < MIN_OPUS_BITRATE || loaded.opusBitrate > MAX_OPUS_BITRATE) {
 			int clamped = Math.max(MIN_OPUS_BITRATE, Math.min(MAX_OPUS_BITRATE, loaded.opusBitrate));
 			SavePointRadioMod.LOGGER.warn(
-					"opusBitrate {} in {} is outside {}..{} (MTU ceiling ~510000) - using {}",
-					loaded.opusBitrate, FILE_NAME, MIN_OPUS_BITRATE, MAX_OPUS_BITRATE, clamped);
+					"opusBitrate {} in {} is outside {}..{} (the encoder caps mono at {}) - using {}",
+					loaded.opusBitrate, FILE_NAME, MIN_OPUS_BITRATE, MAX_OPUS_BITRATE,
+					MAX_OPUS_BITRATE, clamped);
 			loaded.opusBitrate = clamped;
 		}
 		// Opus encode complexity: the encode-latency/quality lever. Clamp 0..10 with
@@ -858,8 +883,9 @@ public final class RadioConfig {
 	 * or migration line is logged once, not per feed. Idempotent and pure aside
 	 * from logging; safe to call on a defaults instance (all keys present).
 	 *
-	 * <p>Order matters: the target is clamped first (0.5..30 s), then the max cap
-	 * (clamped {@code target}..60 s so it can never sit below the target), then
+	 * <p>Order matters: the target is clamped first ({@value #MIN_TARGET_BUFFER_SECONDS}..{@value
+	 * #MAX_TARGET_BUFFER_SECONDS} s), then the max cap (clamped {@code target}..{@value
+	 * #MAX_MAX_BUFFER_SECONDS} s so it can never sit below the target), then
 	 * the preroll (clamped 0.2 s..max). Rounding to frames is re-ordered after so
 	 * {@code preroll,target <= max} and every count is at least one frame.</p>
 	 */

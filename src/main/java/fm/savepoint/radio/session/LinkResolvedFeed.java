@@ -7,7 +7,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Platform-link feed (sow-007): plays a YouTube / SoundCloud / Mixcloud / Twitch / Kick
@@ -49,6 +51,8 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 	/** sow-012: whether the LAST resolve reported a live source ({@code is_live=true}); volatile, set per resolve. */
 	private volatile boolean lastResolvedLive;
 	private volatile boolean loggedResolveFailure;
+	/** The in-flight yt-dlp child, published so {@link #onStop()} can kill it; null when idle. */
+	private volatile Process resolveProcess;
 
 	public LinkResolvedFeed(String stationKey, StationEndpoints.Endpoint endpoint, String ytdlpBinary,
 			String ffmpegBinary, int maxBufferFrames, int targetFrames, int prerollFrames, long maxBackoffSeconds,
@@ -61,6 +65,10 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		this.displayUrl = endpoint.displayUrl();
 		this.ytdlpBinary = ytdlpBinary;
 		this.repeat = repeat;
+		// The page URL is usually public, but the RESOLVED media URL that ends up in the
+		// ffmpeg argv is a signed CDN link. Registering here means the base sanitize masks
+		// it in the diag arg-shape and in any stderr line that echoes it.
+		redactEndpoint(endpoint);
 	}
 
 	@Override
@@ -81,6 +89,8 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 	 */
 	private String resolveAudioUrl() {
 		Process p = null;
+		CompletableFuture<Void> killer = null;
+		AtomicBoolean timedOut = new AtomicBoolean();
 		try {
 			// argv (no shell) - the page URL cannot inject; the trailing "--" ends option parsing.
 			// stderr DISCARDed so it can never fill a pipe and stall waitFor.
@@ -89,6 +99,27 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 			p = new ProcessBuilder(YtDlpResolve.argv(ytdlpBinary, pageUrl))
 					.redirectError(ProcessBuilder.Redirect.DISCARD)
 					.start();
+			// Publish the handle so stop() can kill a resolve that is still running. Without
+			// this the child is reachable only from this frame: an interrupt cannot break a
+			// blocking pipe read, so neither stop() nor shutdown() could ever free it.
+			resolveProcess = p;
+			// Close the publish race: if stop() ran between start() and this publish, its
+			// onStop() read a null resolveProcess and killed nothing, so kill it ourselves.
+			if (!isRunning()) {
+				p.destroyForcibly();
+				return null;
+			}
+			// THE deadline. It has to arm BEFORE the read, not after: draining stdout to EOF
+			// first meant the waitFor below only ever bounded the gap between EOF and exit, so
+			// a yt-dlp that stalls while holding stdout open was unbounded. Killing the child
+			// closes the pipe, which is what actually ends the read.
+			Process child = p;
+			killer = CompletableFuture.runAsync(
+					() -> {
+						timedOut.set(true);
+						child.destroyForcibly();
+					},
+					CompletableFuture.delayedExecutor(RESOLVE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
 			List<String> out = new ArrayList<>();
 			try (BufferedReader r = new BufferedReader(
 					new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
@@ -97,14 +128,20 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 					out.add(line);
 				}
 			}
-			if (!p.waitFor(RESOLVE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-				return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s");
-			}
-			if (p.exitValue() != 0) {
-				return resolveFailed("yt-dlp exit=" + p.exitValue());
-			}
+			// Prefer a good result over the timeout flag: yt-dlp can print every field and close
+			// stdout in the same instant the watchdog fires, and a resolve that actually produced
+			// a URL must not be thrown away as "timed out" (a needless reconnect + spurious WARN).
 			YtDlpResolve.Resolved resolved = YtDlpResolve.parse(out);
 			if (!resolved.ok()) {
+				if (timedOut.get()) {
+					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s");
+				}
+				if (!p.waitFor(RESOLVE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+					return resolveFailed("timed out after " + RESOLVE_TIMEOUT_SECONDS + "s");
+				}
+				if (p.exitValue() != 0) {
+					return resolveFailed("yt-dlp exit=" + p.exitValue());
+				}
 				return resolveFailed("no URL printed");
 			}
 			// "True" => live (keeps reconnecting even with repeat off); "False"/"NA"/absent => finite.
@@ -122,11 +159,26 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		} catch (Throwable t) {
 			return resolveFailed(t.getClass().getSimpleName() + ": " + t.getMessage());
 		} finally {
+			if (killer != null) {
+				// Disarms the watchdog: a cancelled CompletableFuture skips its action, so a
+				// resolve that finished in time never destroys anything.
+				killer.cancel(false);
+			}
+			resolveProcess = null;
 			// Always reap the process: a no-op once it has exited normally, and the fix for
 			// the leak the review found (an exception after start() left it running).
 			if (p != null) {
 				p.destroyForcibly();
 			}
+		}
+	}
+
+	/** Kills a resolve still in flight when the feed is stopped (see {@link #resolveProcess}). */
+	@Override
+	protected void onStop() {
+		Process p = resolveProcess;
+		if (p != null) {
+			p.destroyForcibly();
 		}
 	}
 

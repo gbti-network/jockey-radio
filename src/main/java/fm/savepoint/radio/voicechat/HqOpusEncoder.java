@@ -22,10 +22,11 @@ import java.util.Arrays;
  * is touched.</p>
  *
  * <p><b>MTU safety.</b> An SVC voice packet must fit {@value #MTU_BYTES} bytes. A
- * 20&nbsp;ms frame carries {@code bitrate/50/8} bytes, so the hard ceiling is
- * ~510&nbsp;kbit/s; we clamp the requested bitrate to {@value #MAX_BITRATE} (worst
- * case ~{@code 490000/400} = 1225&nbsp;bytes, safely under the MTU) and cap the
- * encode output buffer at the MTU so Concentus can never emit an oversized packet.
+ * 20&nbsp;ms frame carries {@code bitrate/50/8} bytes, so the MTU-derived ceiling is
+ * ~510&nbsp;kbit/s - but the binding limit is lower: Concentus caps the encoder at
+ * 300&nbsp;kbit/s mono, so we clamp to {@value #MAX_BITRATE} (~750&nbsp;bytes/frame) and
+ * report anything higher instead of letting the library silently reduce it. The encode
+ * output buffer is capped at the MTU so Concentus can never emit an oversized packet.
  * 128&nbsp;kbit/s mono is ~320&nbsp;bytes/frame - comfortably safe.</p>
  *
  * <p><b>Lifecycle.</b> Concentus is pure Java and holds no native handle, so there
@@ -47,10 +48,13 @@ final class HqOpusEncoder implements RadioOpusEncoder {
 	/** Floor for a sane music bitrate. */
 	static final int MIN_BITRATE = 24_000;
 	/**
-	 * Ceiling kept MTU-safe: 490 kbit/s mono @ 20 ms = ~1225 bytes/frame, under
-	 * the {@value #MTU_BYTES}-byte MTU. (The theoretical ceiling is ~510 kbit/s.)
+	 * Ceiling set by the ENCODER, not by the MTU: Concentus's {@code setBitrate} hard-caps
+	 * at {@code 300000 * channels}, so anything above this was silently reduced and the knob
+	 * did nothing over a third of its former advertised range. 300 kbit/s mono @ 20 ms is
+	 * ~750 bytes/frame, still well inside the {@value #MTU_BYTES}-byte MTU (the MTU-derived
+	 * ceiling would be ~510 kbit/s, but the encoder never lets us near it).
 	 */
-	static final int MAX_BITRATE = 490_000;
+	static final int MAX_BITRATE = 300_000;
 
 	private final OpusEncoder encoder;
 	/** Reused encode target, MTU-capped; single-sink/under-lock so no sharing. */

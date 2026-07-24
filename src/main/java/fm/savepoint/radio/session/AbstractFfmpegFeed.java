@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * All the shared ffmpeg-subprocess machinery, generalized out of sow-001's
@@ -60,6 +62,12 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	private static final long MAX_CATCHUP_LAG_NANOS = 200_000_000L;
 	private static final int STDERR_TAIL_LINES = 40;
 	private static final long STATS_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30);
+	/**
+	 * How long a live-but-silent ffmpeg is tolerated before {@link #checkIngestStall()}
+	 * restarts the connection. Comfortably above the per-feed {@code -rw_timeout} so the
+	 * socket-level guard fires first and this stays a genuine backstop.
+	 */
+	private static final long INGEST_STALL_NANOS = TimeUnit.SECONDS.toNanos(60);
 	/** Wall-clock-minus-monotonic gap (ms) at/above which a delivery-loop tick counts as a host/VM freeze. */
 	private static final long HOST_FREEZE_THRESHOLD_MS = 100L;
 	/** Healthy-streaming streak that resets the reconnect backoff. */
@@ -224,6 +232,33 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	/** Bounded tail of recent (sanitized) ffmpeg stderr lines, guarded by itself. */
 	private final ArrayDeque<String> stderrTail = new ArrayDeque<>();
 
+	/**
+	 * Any URL embedded in free text (an ffmpeg stderr line, the diag arg-shape). Stops
+	 * at whitespace and at the quote/bracket characters that delimit a URL in those two
+	 * contexts, so the surrounding text survives the mask.
+	 */
+	private static final Pattern URL_IN_TEXT = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.\\-]*://[^\\s\"'\\]]+");
+
+	/** Endpoint redaction, registered by {@link #redactEndpoint} (null until then). */
+	private volatile String redactEffectiveUrl;
+	private volatile String redactDisplayUrl;
+	private volatile String redactSecret;
+
+	/**
+	 * The argv of the LAST spawn, for the diag arg-shape. Never rebuilt on demand:
+	 * {@code buildCommand()} is an ingest-thread-only contract (LinkResolvedFeed's
+	 * implementation runs a whole yt-dlp resolve), so calling it from a command handler
+	 * froze the server tick loop. Reporting what actually ran is also more accurate.
+	 */
+	private volatile String[] lastCommand;
+
+	/**
+	 * {@code System.nanoTime()} of the most recent frame read from ffmpeg, or {@code 0}
+	 * when this connection has not produced one yet. Read by {@link #checkIngestStall()}
+	 * on the delivery thread; written by the ingest thread.
+	 */
+	private volatile long lastIngestFrameNanos;
+
 	private final AtomicLong framesRead = new AtomicLong();
 	private final AtomicLong framesDelivered = new AtomicLong();
 	private final AtomicLong silenceFrames = new AtomicLong();
@@ -301,6 +336,11 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	private final AtomicBoolean started = new AtomicBoolean();
 	private final AtomicBoolean stopped = new AtomicBoolean();
 	private volatile boolean running;
+
+	/** Whether the feed is still live (not stopped). Lets a subclass abort an in-flight resolve. */
+	protected final boolean isRunning() {
+		return running;
+	}
 	private volatile Process process;
 	private volatile Future<?> ingestTask;
 	private volatile Future<?> deliveryTask;
@@ -472,12 +512,80 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	protected abstract String startLogDetail();
 
 	/**
-	 * Redacts a single stderr line before it is recorded or logged. Default:
-	 * no secrets, returned unchanged. Subclasses with a token/stream key
-	 * override to strip it.
+	 * Redacts a single line (stderr, or the diag arg-shape) before it is recorded or
+	 * logged. The default is NOT a no-op: it masks every URL in the line, so a feed
+	 * that forgets to register its endpoint still cannot leak a tokened URL.
+	 *
+	 * <p>Subclasses that need extra redaction (a stream key that is not part of a URL,
+	 * say) override this and call {@code super.sanitize(line)} first.</p>
 	 */
 	protected String sanitize(String line) {
-		return line;
+		return redactUrls(line);
+	}
+
+	/**
+	 * Registers the feed's endpoint for redaction. Subclasses whose ffmpeg input is a
+	 * URL MUST call this from their constructor; everything that logs or prints a line
+	 * then routes through {@link #sanitize(String)} and the secret cannot escape.
+	 *
+	 * <p>Audit fix: previously each subclass had to remember to store
+	 * {@code endpoint.secret()} AND override {@code sanitize}. {@link HlsPullFeed} did;
+	 * {@link FileLoopFeed} and {@link LinkResolvedFeed} did not, so a FILE disc whose
+	 * URL carried a token printed it verbatim in {@code /radiodisc diag} (gated only at
+	 * gamemaster level, BELOW the admin gate that protects the disc UI) and in the
+	 * reconnect WARN line. Registering by construction removes the chance to forget.</p>
+	 */
+	protected final void redactEndpoint(StationEndpoints.Endpoint endpoint) {
+		if (endpoint == null) {
+			return;
+		}
+		this.redactEffectiveUrl = endpoint.effectiveUrl();
+		this.redactDisplayUrl = endpoint.displayUrl();
+		this.redactSecret = endpoint.secret();
+	}
+
+	/**
+	 * Replaces the registered effective URL with its display form, blanks the exact
+	 * secret, and then masks the query values of EVERY remaining URL in the line.
+	 *
+	 * <p>That last pass is the load-bearing one. It is unconditional because a secret
+	 * can ride under any param name - a presigned CDN link uses {@code ?sig=} or
+	 * {@code ?X-Amz-Signature=}, and a yt-dlp-resolved media URL carries its own
+	 * signature - so a {@code token=}-only pattern would still leak. It reuses
+	 * {@link StationEndpoints#redactDisplay} rather than a second regex, so the display
+	 * surfaces and the log surfaces cannot drift apart.</p>
+	 */
+	protected final String redactUrls(String line) {
+		if (line == null || line.isEmpty()) {
+			return line;
+		}
+		String effective = redactEffectiveUrl;
+		String display = redactDisplayUrl;
+		String secret = redactSecret;
+		if (effective != null && display != null && line.contains(effective)) {
+			line = line.replace(effective, display);
+		}
+		if (secret != null && !secret.isEmpty() && line.contains(secret)) {
+			line = line.replace(secret, "***");
+		}
+		if (line.indexOf("://") < 0) {
+			return line;
+		}
+		Matcher m = URL_IN_TEXT.matcher(line);
+		StringBuilder out = new StringBuilder(line.length());
+		while (m.find()) {
+			m.appendReplacement(out, Matcher.quoteReplacement(StationEndpoints.redactDisplay(m.group())));
+		}
+		m.appendTail(out);
+		return out.toString();
+	}
+
+	/**
+	 * Called once from {@link #stop()}, after the ffmpeg child is destroyed and before
+	 * the ingest task is cancelled. Subclasses that own an additional child process
+	 * override this to kill it. Must not throw (a throw is caught and logged at debug).
+	 */
+	protected void onStop() {
 	}
 
 	/**
@@ -641,6 +749,14 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		Process p = process;
 		if (p != null) {
 			p.destroy();
+		}
+		// A subclass may own a HELPER child that is not the ffmpeg process (LinkResolvedFeed's
+		// yt-dlp resolve). Interrupting the ingest thread cannot free it - a read on a process
+		// pipe is not interruptible - so the subclass gets an explicit chance to kill it here.
+		try {
+			onStop();
+		} catch (Throwable t) {
+			SavePointRadioMod.LOGGER.debug("[radio] feed onStop hook failed station={}: {}", stationKey, t.toString());
 		}
 		Future<?> ingest = ingestTask;
 		if (ingest != null) {
@@ -902,12 +1018,18 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	}
 
 	/**
-	 * The feed's ffmpeg command as a single string, run through the subclass
-	 * {@link #sanitize(String)} so any token/stream key is redacted exactly as it
-	 * is in stderr. Diagnostics only.
+	 * The argv of the last spawn as a single string, run through {@link #sanitize(String)}
+	 * so any token/stream key is redacted exactly as it is in stderr. Diagnostics only.
+	 *
+	 * <p>Reads the {@link #lastCommand} snapshot rather than calling
+	 * {@code buildCommand()}: that method is an ingest-thread contract and may spawn a
+	 * process (LinkResolvedFeed resolves through yt-dlp), which would make this getter -
+	 * documented as cheap and safe on any thread, and reached from a Brigadier command
+	 * handler - block the main server thread on network I/O.</p>
 	 */
 	private String redactedCommand() {
-		return sanitize(String.join(" ", buildCommand()));
+		String[] cmd = lastCommand;
+		return cmd == null ? "(not spawned yet)" : sanitize(String.join(" ", cmd));
 	}
 
 	// ------------------------------------------------------------------
@@ -919,6 +1041,9 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		long attempt = 0;
 		while (running && !Thread.currentThread().isInterrupted()) {
 			connectionState = "connecting";
+			// Per-connection reset, so a value left by the PREVIOUS connection cannot make
+			// the stall watchdog fire against a listener that has not streamed yet.
+			lastIngestFrameNanos = 0L;
 			long firstFrameNanos = -1L;
 			long lastFrameNanos = -1L;
 			String reason;
@@ -1005,7 +1130,11 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	}
 
 	private Process spawnProcess() throws IOException {
-		return new ProcessBuilder(List.of(buildCommand())).start();
+		String[] cmd = buildCommand();
+		// Snapshot for the diag arg-shape, so getDiagLine() never has to rebuild (and
+		// possibly re-resolve) the command on a caller's thread.
+		lastCommand = cmd;
+		return new ProcessBuilder(List.of(cmd)).start();
 	}
 
 	/**
@@ -1027,6 +1156,8 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				short[] frame = new short[FRAME_SAMPLES];
 				ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(frame);
 				lastFrameNanos = System.nanoTime();
+				// Published for the stall watchdog, which cannot see this method's local.
+				lastIngestFrameNanos = lastFrameNanos;
 				if (firstFrameNanos < 0) {
 					firstFrameNanos = lastFrameNanos;
 					connectionState = "streaming";
@@ -1665,6 +1796,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 									+ "savepoint_radio.json",
 							stationKey, overflowDelta, maxBufferFrames);
 				}
+				checkIngestStall();
 			}
 
 			next += FRAME_NANOS;
@@ -1735,6 +1867,46 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * feed executor thread) - never from {@link #stop()}, whose caller is
 	 * frequently the server thread and must not wait on the grace period.
 	 */
+	/**
+	 * Backstop for a STALLED-BUT-ALIVE ffmpeg. {@code readFrames} blocks on the child's
+	 * stdout with no deadline, so a child that stops producing without exiting parks the
+	 * ingest thread: the connection never "ends", the reconnect ladder never runs, and the
+	 * feed is silent while diag still reports {@code state=streaming}. The per-feed
+	 * {@code -rw_timeout} handles the common socket case; this catches everything else by
+	 * killing the child, which EOFs the read and hands over to the existing ladder.
+	 *
+	 * <p>Only fires for a connection that HAS streamed. A connection with no frames yet is
+	 * the normal state of an RTMP listener waiting for a publisher, and killing that would
+	 * break the listener the operator is waiting on.</p>
+	 *
+	 * <p>Runs on the delivery thread, from the 30 s stats tick.</p>
+	 */
+	private void checkIngestStall() {
+		if (!running) {
+			return;
+		}
+		Process p = process;
+		long last = lastIngestFrameNanos;
+		if (p == null || last == 0L || !p.isAlive()) {
+			return;
+		}
+		long stalledNanos = System.nanoTime() - last;
+		if (stalledNanos < INGEST_STALL_NANOS) {
+			return;
+		}
+		SavePointRadioMod.LOGGER.warn(
+				"[radio] feed ingest stalled station={} - no audio from ffmpeg for {}s while the process is still "
+						+ "alive; restarting the connection",
+				stationKey, TimeUnit.NANOSECONDS.toSeconds(stalledNanos));
+		lastIngestFrameNanos = 0L;
+		// Only the NON-blocking SIGTERM here: this runs on the real-time delivery thread, which
+		// must never park on destroyProcess()'s 2 s grace wait (that would starve every listener
+		// mid-playout). p.destroy() closes ffmpeg's stdout, which unblocks the ingest thread's
+		// readFrames; that thread's own finally block then runs the full destroyProcess() with
+		// the grace period, where waiting IS allowed, and rides the reconnect ladder.
+		p.destroy();
+	}
+
 	private static void destroyProcess(Process p) {
 		p.destroy();
 		try {

@@ -19,8 +19,10 @@ import net.minecraft.world.level.block.entity.JukeboxBlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -171,6 +173,102 @@ public final class RadioManager {
 	}
 
 	/**
+	 * Single entry point for "the disc registry changed" (create / edit / delete / reload).
+	 * Rebuilds the live sessions the change actually affects, then reconciles the RTMP
+	 * keep-alive anchors.
+	 *
+	 * <p><b>Why sessions must be stopped before the anchors reconcile.</b> A feed is shared
+	 * and ref-counted, and {@code release} only stops it at zero refs. When an RTMP disc was
+	 * edited while playing, the keep-alive released its anchor (2&nbsp;&rarr;&nbsp;1) and
+	 * immediately re-acquired - getting back the SAME feed, still listening on the old port
+	 * with the old stream key - and then recorded the new definition as anchored, so no later
+	 * reconcile ever retried. The rotated key silently did not take effect until a restart.
+	 * Dropping every session's reference FIRST lets the count reach zero, so the anchor pass
+	 * builds a genuinely fresh feed; the sessions then re-acquire and join it.</p>
+	 *
+	 * <p>Deleting a disc had the mirror problem: nothing reconciled sessions at all, so a
+	 * deleted disc kept streaming, kept its RTMP port bound, and kept its token in use until
+	 * the disc was ejected or the server restarted. It now becomes an inert session - still
+	 * tracked, so ejecting works, but silent.</p>
+	 *
+	 * <p>Presentation-only edits (colour, base disc, name style) leave the fingerprint
+	 * unchanged and never interrupt playback.</p>
+	 */
+	public void onDiscsChanged() {
+		List<RestartRequest> restarts = List.of();
+		if (server != null && !shuttingDown) {
+			checkServerThread("onDiscsChanged");
+			restarts = stopSessionsNeedingRebuild();
+		}
+		// Always runs: it self-guards on `armed`, so the startup load is a no-op.
+		RtmpKeepAlive.get().onDiscsChanged();
+		// Only ACTIVE sessions are restarted. A SUSPENDED session (its chunk unloaded) is left
+		// stopped so it rebuilds lazily and correctly on the next chunk load - reactivating it
+		// here would spawn a live feed and an SVC channel for a jukebox nobody can hear, which
+		// nothing would ever suspend again (the unload event already fired).
+		for (RestartRequest request : restarts) {
+			start(request.pos(), discResolution(request.discId()));
+		}
+	}
+
+	/** An ACTIVE session stopped by {@link #onDiscsChanged()} that must be re-activated after it. */
+	private record RestartRequest(GlobalPos pos, String discId) {
+	}
+
+	/**
+	 * Stops every registry-disc session whose definition changed, appeared or disappeared,
+	 * and returns the ACTIVE ones to re-activate. Sessions for config stations and unaffected
+	 * discs are left alone.
+	 *
+	 * <p>State-aware, because a disc edit reaches sessions in every state:
+	 * <ul>
+	 *   <li>ACTIVE (playing): stop and queue a restart, so the edit takes effect live.</li>
+	 *   <li>SUSPENDED (chunk unloaded): stop and DROP it - reactivating would stream to an
+	 *       unloaded chunk forever; the normal chunk-load path rebuilds it fresh.</li>
+	 *   <li>FINISHED (repeat-off, already played once): leave it entirely - it holds no feed,
+	 *       and restarting would replay a disc that has legitimately stopped.</li>
+	 * </ul></p>
+	 */
+	private List<RestartRequest> stopSessionsNeedingRebuild() {
+		if (sessions.isEmpty()) {
+			return List.of();
+		}
+		List<RestartRequest> restarts = new ArrayList<>();
+		for (RadioSession session : List.copyOf(sessions.values())) {
+			String identity = session.identity();
+			String discId;
+			if (identity.startsWith("disc:")) {
+				discId = identity.substring("disc:".length());
+			} else if (identity.startsWith("inert:")) {
+				// A disc id that did not exist when the session started. If it exists now
+				// (the admin just created it), the session should start playing it.
+				discId = identity.substring("inert:".length());
+			} else {
+				continue; // config station - the disc registry cannot affect it
+			}
+			DiscDefinition def = DiscRegistry.get().get(discId).orElse(null);
+			String nowIdentity = def == null ? "inert:" + discId : "disc:" + discId;
+			String nowFingerprint = def == null ? "" : def.ingestFingerprint();
+			if (identity.equals(nowIdentity) && session.fingerprint().equals(nowFingerprint)) {
+				continue;
+			}
+			// A play-once disc that already finished holds no feed and must not replay on an edit.
+			if (session.isFinished()) {
+				continue;
+			}
+			// Tear down any audible monitor of this disc first, so its independent feed ref does
+			// not keep a stale feed alive past the keep-alive reconcile.
+			MonitorService.get().stopForDisc(discId);
+			boolean wasActive = session.state() == RadioSession.State.ACTIVE;
+			stop(session, def == null ? "disc deleted" : "disc edited");
+			if (wasActive) {
+				restarts.add(new RestartRequest(session.pos(), discId));
+			}
+		}
+		return restarts;
+	}
+
+	/**
 	 * Upgrades every ACTIVE session that is still on a placeholder (null) sink to
 	 * a real voicechat channel. Called (via {@code server.execute}, so on the
 	 * server thread) by the voicechat plugin when the SVC server api becomes
@@ -303,17 +401,26 @@ public final class RadioManager {
 	private Resolution resolveDisc(ItemStack item) {
 		String discId = RadioDiscFactory.readDiscId(item).orElse(null);
 		if (discId != null) {
-			DiscDefinition def = DiscRegistry.get().get(discId).orElse(null);
-			if (def == null) {
-				return new Resolution("inert:" + discId, discId, null);
-			}
-			return new Resolution("disc:" + discId, discId, discFeedSource(discId, def));
+			return discResolution(discId);
 		}
 		String stationKey = RadioDiscFactory.readStationKey(item).orElse(null);
 		if (stationKey != null) {
-			return new Resolution("station:" + stationKey, stationKey, configStationSource(stationKey));
+			return new Resolution("station:" + stationKey, stationKey, configStationSource(stationKey), "");
 		}
 		return null;
+	}
+
+	/**
+	 * The resolution for a registry disc id. Split out of {@link #resolveDisc} so
+	 * {@link #onDiscsChanged()} can rebuild a session without the jukebox's {@link ItemStack}.
+	 */
+	private Resolution discResolution(String discId) {
+		DiscDefinition def = DiscRegistry.get().get(discId).orElse(null);
+		if (def == null) {
+			return new Resolution("inert:" + discId, discId, null, "");
+		}
+		return new Resolution("disc:" + discId, discId, discFeedSource(discId, def),
+				def.ingestFingerprint());
 	}
 
 	/**
@@ -327,7 +434,16 @@ public final class RadioManager {
 		int radius = def.radiusBlocks;
 		// Namespaced registry key ("disc:") keeps admin discs disjoint from config
 		// stations in the shared-feed map; the feed itself still logs the bare discId.
-		return new FeedSource("disc:" + discId, discId, radius, () -> {
+		// The key intentionally MATCHES RadioSession.identity() ("disc:" + id): several call
+		// sites (sweepFinishedSessions, MusicSuppressor, NowPlayingHud) look a feed's state up
+		// by the session identity, so the two must stay equal.
+		//
+		// Known minor limitation: two jukeboxes holding the SAME play-once (repeat=off) disc
+		// share this one feed, so a second jukebox that receives it mid-track hears the tail and
+		// both stop together at end-of-input. Re-inserting replays from the top. Giving each
+		// jukebox its own feed would need the identity/key coupling above to be broken first.
+		String key = "disc:" + discId;
+		return new FeedSource(key, discId, radius, () -> {
 			RadioConfig config = RadioConfig.get();
 			return switch (def.sourceType) {
 				case HLS_PULL -> new HlsPullFeed(discId, StationEndpoints.forDiscResolved(def, config),
@@ -395,7 +511,7 @@ public final class RadioManager {
 	}
 
 	/** Resolved disc: namespaced identity, {@code station=} label, feed source (null = inert). */
-	private record Resolution(String identity, String label, FeedSource source) {
+	private record Resolution(String identity, String label, FeedSource source, String fingerprint) {
 	}
 
 	/** The jukebox block is being removed from the world. */
@@ -580,7 +696,8 @@ public final class RadioManager {
 
 	private void start(GlobalPos globalPos, Resolution resolution) {
 		RadioSession session = new RadioSession(
-				resolution.identity(), resolution.label(), resolution.source(), globalPos);
+				resolution.identity(), resolution.label(), resolution.source(), globalPos,
+				resolution.fingerprint());
 		sessions.put(globalPos, session);
 		session.activate(server);
 		if (resolution.source() == null) {

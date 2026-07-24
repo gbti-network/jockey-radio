@@ -79,9 +79,9 @@ public final class DialogRouter {
 			case "create_rtmp" -> DialogScreens.send(player,
 					SavePointDialogs.createRtmpForm(player.registryAccess(), Optional.empty(), false));
 			// A fresh nav from the source chooser carries nothing -> a blank form. Coming BACK from
-			// the audio browser it carries the in-progress values, so the form is restored as typed.
-			case "create_file" -> DialogScreens.send(player,
-					SavePointDialogs.createFileForm(player.registryAccess(), fileCarryPrefill(tag, null, null), false));
+			// the audio browser it carries the in-progress values, so the form is restored as typed
+			// - including whether this was an EDIT, so cancelling a browse mid-edit stays an edit.
+			case "create_file" -> sendFileForm(player, tag, null, null);
 			// sow-013: the chooser hides this entry when the gate is closed, but the dialog payload is
 			// client-supplied and can be forged or replayed - so refuse here too rather than trusting
 			// that the button was not rendered.
@@ -98,6 +98,10 @@ public final class DialogRouter {
 			}
 			// Capture whatever the admin has already typed so the browse trip does not blank it.
 			case "browse_audio" -> DialogScreens.send(player, SavePointDialogs.browseAudio(fileFormCarry(tag)));
+			// Re-open the create/edit form the admin was filling in, from the payload a
+			// save-error notice carried back. Same lenient rebuild the cyclers use, so
+			// nothing typed is lost and an RTMP stream key is never regenerated.
+			case "form_back" -> rerenderForm(player, tag, false, false, false);
 			case "pick_audio" -> handlePickAudio(player, tag);
 			case "manage" -> DialogScreens.send(player, SavePointDialogs.manageList(player.registryAccess(), null));
 			case "detail" -> handleDetail(player, tag);
@@ -152,8 +156,27 @@ public final class DialogRouter {
 		}
 		int dot = file.lastIndexOf('.');
 		String derivedName = dot > 0 ? file.substring(0, dot) : file;
-		DialogScreens.send(player, SavePointDialogs.createFileForm(player.registryAccess(),
-				fileCarryPrefill(tag, url, derivedName), false));
+		sendFileForm(player, tag, url, derivedName);
+	}
+
+	/**
+	 * Re-opens the FILE form from a carry tag, preserving whether this is an EDIT.
+	 *
+	 * <p>Both browse exits (picking a file, and Back) route through here. The {@code edit}
+	 * key rides in the carry tag; when it is set the form re-opens in edit mode against
+	 * that disc id, so a browse during an edit no longer turns into a create.</p>
+	 */
+	private static void sendFileForm(ServerPlayer player, CompoundTag tag, String streamUrlOverride,
+			String nameFallback) {
+		String editId = tag.getStringOr("edit", "");
+		boolean edit = !editId.isBlank();
+		Optional<DiscDefinition> prefill = fileCarryPrefill(tag, streamUrlOverride, nameFallback);
+		if (edit) {
+			// The edit form omits the id input, so the id must come from the carried edit key
+			// rather than from a field the admin could not have filled in.
+			prefill.ifPresent(d -> d.discId = editId);
+		}
+		DialogScreens.send(player, SavePointDialogs.createFileForm(player.registryAccess(), prefill, edit));
 	}
 
 	/**
@@ -165,6 +188,9 @@ public final class DialogRouter {
 	private static CompoundTag fileFormCarry(CompoundTag tag) {
 		CompoundTag c = new CompoundTag();
 		c.putString("carry", "1");
+		// Carried so an EDIT stays an edit across the round trip (the browse dialog and its
+		// Back button re-emit this whole tag). Without it the trip degraded into a create.
+		c.putString("edit", tag.getStringOr("edit", ""));
 		c.putString("disc_id", tag.getStringOr("disc_id", ""));
 		c.putString("name", tag.getStringOr("name", ""));
 		c.putString("stream_url", tag.getStringOr("stream_url", ""));
@@ -411,14 +437,9 @@ public final class DialogRouter {
 		if (!edit) {
 			String normalizedId = def.discId == null ? "" : def.discId.trim().toLowerCase(Locale.ROOT);
 			if (DiscRegistry.get().get(normalizedId).isPresent()) {
-				String back = switch (source) {
-					case "rtmp_receive" -> "create_rtmp";
-					case "file" -> "create_file";
-					case "platform" -> "create_platform";
-					default -> "create_pull";
-				};
-				DialogScreens.send(player, SavePointDialogs.errorThen("Disc already exists",
-						"A disc '" + safe(normalizedId) + "' already exists - use Manage to edit it.", back, ""));
+				// Back to the SAME form with everything still filled in, not a blank one.
+				DialogScreens.send(player, SavePointDialogs.errorThenForm("Disc already exists",
+						"A disc '" + safe(normalizedId) + "' already exists - use Manage to edit it.", tag.copy()));
 				return;
 			}
 		}
@@ -427,13 +448,8 @@ public final class DialogRouter {
 		// yields an error string and nothing is written.
 		Optional<String> error = DiscRegistry.get().put(def);
 		if (error.isPresent()) {
-			String back = edit ? "manage" : switch (source) {
-				case "rtmp_receive" -> "create_rtmp";
-				case "file" -> "create_file";
-				case "platform" -> "create_platform";
-				default -> "create_pull";
-			};
-			DialogScreens.send(player, SavePointDialogs.errorThen("Could not save disc", error.get(), back, ""));
+			DialogScreens.send(player,
+					SavePointDialogs.errorThenForm("Could not save disc", error.get(), tag.copy()));
 			return;
 		}
 		// Audit the mutation (never the token/streamKey - only the disc id + actor).
@@ -569,13 +585,25 @@ public final class DialogRouter {
 
 	private static void handleDelete(ServerPlayer player, CompoundTag tag) {
 		String discId = tag.getStringOr("id", "");
-		boolean removed = DiscRegistry.get().remove(discId);
+		// Empty = actually removed AND persisted. A failed write or an unreadable registry
+		// now reports why instead of claiming success for a disc that comes back on restart.
+		Optional<String> failure = DiscRegistry.get().remove(discId);
+		boolean removed = failure.isEmpty();
 		if (removed) {
 			RadioAudit.log("delete", discId, RadioAudit.actor(player));
 		}
-		String status = removed
-				? "Deleted '" + safe(discId) + "'."
-				: "No disc '" + safe(discId) + "' to delete.";
+		String status;
+		if (removed) {
+			status = "Deleted '" + safe(discId) + "'.";
+		} else if (DiscRegistry.NOT_FOUND_MARKER.equals(failure.get())) {
+			// The only failure whose text embeds the client-supplied id; build it here so the id
+			// is sanitised while the server-authored reasons below pass through in full.
+			status = "No disc '" + safe(discId) + "' to delete.";
+		} else {
+			// Server-generated reason (read-only latch, write failure): do NOT run it through
+			// safe(), whose 48-char cap for disc ids would cut off the recovery instruction.
+			status = failure.get();
+		}
 		DialogScreens.send(player, SavePointDialogs.manageList(player.registryAccess(), status, !removed));
 	}
 
@@ -703,8 +731,11 @@ public final class DialogRouter {
 
 	private static void handleReload(ServerPlayer player) {
 		DiscRegistry.get().reload();
-		DialogScreens.send(player, SavePointDialogs.noticeThen("Reloaded",
-				"Reloaded " + DiscRegistry.get().size() + " disc(s).", "root"));
+		String message = DiscRegistry.get().isReadOnly()
+				? "Reloaded " + DiscRegistry.get().size() + " disc(s), but " + DiscRegistry.FILE_NAME
+						+ " could not be fully read - SAVING IS DISABLED. Fix or remove that file, then reload again."
+				: "Reloaded " + DiscRegistry.get().size() + " disc(s).";
+		DialogScreens.send(player, SavePointDialogs.noticeThen("Reloaded", message, "root"));
 	}
 
 	// ------------------------------------------------------------------

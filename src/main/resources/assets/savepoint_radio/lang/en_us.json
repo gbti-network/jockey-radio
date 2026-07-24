@@ -23,6 +23,7 @@
 
 	"savepoint_radio.button.save": "Save disc",
 	"savepoint_radio.button.back": "Back",
+	"savepoint_radio.button.back_to_form": "Back to form",
 	"savepoint_radio.button.ok": "OK",
 	"savepoint_radio.button.cancel": "Cancel",
 	"savepoint_radio.button.delete": "Delete",
