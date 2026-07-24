@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "fm.savepoint.svcbuffer.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"client": [
+		"ALSpeakerBaseMixin"
+	]
+}

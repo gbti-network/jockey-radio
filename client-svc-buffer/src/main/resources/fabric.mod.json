@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "savepoint_svc_buffer",
+	"version": "${version}",
+	"name": "SavePoint SVC Buffer",
+	"description": "Client-only mixin that deepens Simple Voice Chat's playout buffer beyond its 16-packet cap, removing the periodic micro-hitches in continuous music streams. Tunable via config/savepoint-svc-buffer.properties.",
+	"authors": [
+		"SavePoint.fm"
+	],
+	"contact": {
+		"homepage": "https://savepoint.fm"
+	},
+	"license": "ARR",
+	"environment": "client",
+	"mixins": [
+		"savepoint_svc_buffer.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "26.2",
+		"voicechat": "*"
+	}
+}

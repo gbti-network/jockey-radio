@@ -1,0 +1,142 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = 'savepoint-radio'
+}
+
+repositories {
+	// Simple Voice Chat API (compileOnly integration for later phases)
+	maven {
+		name = 'MaxHenkel'
+		url = 'https://maven.maxhenkel.de/repository/public'
+	}
+	// Concentus (pure-Java Opus encoder) for our own high-bitrate radio encoder.
+	maven {
+		name = 'JitPack'
+		url = 'https://jitpack.io'
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
+
+	// Pure-Java Opus encoder we control, so OUR radio channels can encode at a
+	// music-grade bitrate SVC's api.createEncoder(AUDIO) cannot set. Pinned to a
+	// commit for reproducibility (TSRBerry fork adds the root pom JitPack needs;
+	// the module jar is clean org/concentus/* with zero transitive deps).
+	// 'implementation' = compile classpath; 'include' = Loom jar-in-jar bundle so
+	// the classes are on the mod classpath at runtime on a real server.
+	implementation 'com.github.TSRBerry.concentus:Concentus:2115243f00'
+	include        'com.github.TSRBerry.concentus:Concentus:2115243f00'
+
+	// Unit tests. Only classes with no Minecraft dependency are tested (e.g. YtDlpResolve),
+	// so the suite runs fast and offline without booting the game.
+	testImplementation platform('org.junit:junit-bom:5.11.3')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly   'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+	withSourcesJar()
+}
+
+processResources {
+	inputs.property 'version', project.version
+
+	filesMatching('fabric.mod.json') {
+		expand 'version': project.version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.encoding = 'UTF-8'
+}
+
+// Fast, offline unit tests. The live connector checks are tagged "connector" and excluded here
+// so a normal build never depends on the network or on yt-dlp being installed.
+tasks.named('test', Test) {
+	useJUnitPlatform {
+		excludeTags 'connector'
+	}
+	testLogging {
+		events 'passed', 'failed', 'skipped'
+		exceptionFormat = 'full'
+	}
+}
+
+// Platform-connector integrity check (sow-007/sow-013). Runs the REAL yt-dlp against one known URL
+// per platform and asserts it still resolves to a format ffmpeg can demux. This is what detects
+// "YouTube changed its framework" - it is EXPECTED to break over time, which is why it is opt-in and
+// never part of `build`.
+//
+//   ./gradlew connectorCheck                       # uses yt-dlp from PATH
+//   ./gradlew connectorCheck -Pytdlp=/path/to/yt-dlp
+tasks.register('connectorCheck', Test) {
+	group = 'savepoint'
+	description = 'Live check that every platform connector still resolves (network + yt-dlp required).'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'connector'
+	}
+	systemProperty 'savepoint.connector.enabled', 'true'
+	systemProperty 'savepoint.ytdlp', (project.findProperty('ytdlp') ?: 'yt-dlp').toString()
+	outputs.upToDateWhen { false }
+	testLogging {
+		events 'passed', 'failed', 'skipped'
+		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
+}
+
+jar {
+	from('LICENSE') {
+		rename { "${it}_${base.archivesName.get()}" }
+	}
+}
+
+// Deploys the freshly built mod jar into the local dev server's mods folder.
+// On unobfuscated 26.x there is no remapJar task (no mappings), so fall back to jar.
+def outputJarTaskName = tasks.findByName('remapJar') != null ? 'remapJar' : 'jar'
+
+tasks.register('deployMod') {
+	dependsOn tasks.named(outputJarTaskName)
+	group = 'savepoint'
+	description = 'Builds the mod and copies the finished jar into .server/mods, replacing any older copies.'
+
+	def serverModsDir = file('.server/mods')
+
+	doLast {
+		def builtJar = tasks.named(outputJarTaskName).get().archiveFile.get().asFile
+
+		serverModsDir.mkdirs()
+
+		// Remove any previously deployed SavePoint Radio jars.
+		serverModsDir.listFiles()?.each { f ->
+			def n = f.name
+			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('savepoint_radio.*\\.jar')) {
+				println "deployMod: deleting old ${f.name}"
+				f.delete()
+			}
+		}
+
+		copy {
+			from builtJar
+			into serverModsDir
+		}
+		println "deployMod: deployed ${builtJar.name} -> ${serverModsDir}"
+	}
+}

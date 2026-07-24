@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# No secrets are used anywhere in this workflow.
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Builds the mod (compileJava + processResources + jar). There is no
+      # gametest task wired up on this toolchain yet (see README "Testing"),
+      # so `build` is the full CI gate. If a `runGametest` task is added in a
+      # later phase, append it here.
+      - name: Build
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Upload built jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: savepoint-radio-jar
+          path: build/libs/*.jar
+          if-no-files-found: error

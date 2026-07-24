@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "savepoint_radio",
+	"version": "${version}",
+	"name": "SavePoint Radio",
+	"description": "Vanilla-safe music discs that stream live radio into any jukebox as positional Simple Voice Chat audio. Server-side, ffmpeg-backed HLS and RTMP ingest.",
+	"authors": [
+		"SavePoint.fm"
+	],
+	"contact": {
+		"homepage": "https://savepoint.fm",
+		"sources": "https://github.com/savepoint-fm/minecraft-savepoint-radio",
+		"issues": "https://github.com/savepoint-fm/minecraft-savepoint-radio/issues"
+	},
+	"license": "ARR",
+	"icon": "assets/savepoint_radio/icon.png",
+	"environment": "server",
+	"entrypoints": {
+		"main": [
+			"fm.savepoint.radio.SavePointRadioMod"
+		],
+		"voicechat": [
+			"fm.savepoint.radio.voicechat.SavePointVoicechatPlugin"
+		]
+	},
+	"mixins": [
+		"savepoint_radio.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "26.2",
+		"fabric-command-api-v2": "*",
+		"fabric-lifecycle-events-v1": "*",
+		"fabric-networking-api-v1": "*",
+		"fabric-resource-loader-v1": "*",
+		"voicechat": ">=2.6.21"
+	}
+}

@@ -1,0 +1,17 @@
+{
+  "name": "minecraft-savepoint-radio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev shortcuts for the SavePoint Radio Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
+  "scripts": {
+    "server-gui": "sh -c '(sleep 1; explorer.exe http://127.0.0.1:8750 >/dev/null 2>&1 || true) & exec python3 tools/server-panel/panel.py'",
+    "panel": "python3 tools/server-panel/panel.py",
+    "doctor": "python3 tools/server-panel/panel.py --doctor",
+    "setup": "python3 tools/server-panel/panel.py --setup",
+    "server:start": "curl -s -X POST http://127.0.0.1:8750/start && echo",
+    "server:stop": "curl -s -X POST http://127.0.0.1:8750/stop && echo",
+    "server:restart": "curl -s -X POST http://127.0.0.1:8750/restart && echo",
+    "server:status": "curl -s http://127.0.0.1:8750/status && echo",
+    "server:logs": "curl -s 'http://127.0.0.1:8750/logs?tail=100'"
+  }
+}
