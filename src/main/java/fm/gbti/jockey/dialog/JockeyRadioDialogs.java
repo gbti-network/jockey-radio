@@ -48,7 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Pure factory of vanilla {@link Dialog} objects for the {@code /jocky}
+ * Pure factory of vanilla {@link Dialog} objects for the {@code /jockey}
  * admin UI (the sow-002 W4 redesign). No side effects, no registry writes -
  * every builder reads the live {@link DiscRegistry} snapshot and returns an
  * inline dialog for {@link DialogScreens#send}. Routing of the click actions

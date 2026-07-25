@@ -63,7 +63,7 @@ public final class BundledBinaries {
 	/**
 	 * Extracts the bundled binaries if needed and repoints {@code config} at them. Idempotent
 	 * and never throws. Called from {@link RadioConfig#load()} so every load (including
-	 * {@code /jocky reload}) resolves consistently.
+	 * {@code /jockey reload}) resolves consistently.
 	 */
 	public static void installAndResolve(RadioConfig config, Path configDir) {
 		try {

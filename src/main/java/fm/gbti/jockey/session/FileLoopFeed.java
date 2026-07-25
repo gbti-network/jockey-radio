@@ -48,7 +48,7 @@ public final class FileLoopFeed extends AbstractFfmpegFeed {
 		this.repeat = repeat;
 		// A FILE disc's URL is routinely a presigned/tokened CDN link. Without this the
 		// base sanitize has nothing to swap the display form in for, and the tokened URL
-		// reaches the reconnect WARN line and the /jocky diag arg-shape verbatim.
+		// reaches the reconnect WARN line and the /jockey diag arg-shape verbatim.
 		redactEndpoint(endpoint);
 	}
 

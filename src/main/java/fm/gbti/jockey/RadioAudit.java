@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Admin audit trail for disc registry mutations. Every create/edit/delete/give
- * that goes through the {@code /jocky} dialog router or the commands emits
+ * that goes through the {@code /jockey} dialog router or the commands emits
  * exactly one line so who-did-what is recoverable from the server log:
  *
  * <pre>[jockey] admin &lt;action&gt; disc=&lt;id&gt; by=&lt;name&gt;/&lt;uuid&gt;</pre>

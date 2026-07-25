@@ -118,7 +118,7 @@ public final class RadioSession {
 	/**
 	 * The last now-playing poll outcome for this session (status text only, never an
 	 * error the radio depends on). {@code OFF} until the poller reports. Volatile so
-	 * an off-thread reader ({@code /jocky diag}) sees a fresh value.
+	 * an off-thread reader ({@code /jockey diag}) sees a fresh value.
 	 */
 	private volatile NowPlayingStatus nowPlayingStatus = NowPlayingStatus.OFF;
 

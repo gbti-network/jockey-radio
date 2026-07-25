@@ -93,7 +93,7 @@ public final class StationEndpoints {
 
 	/**
 	 * Sanitizes a URL for every admin-visible surface (disc-detail 'Source' row +
-	 * 'Copy source URL' button, the INFO feed-start log, {@code /jocky list}).
+	 * 'Copy source URL' button, the INFO feed-start log, {@code /jockey list}).
 	 * The {@code token=} param is already dropped upstream ({@link #stripTokenParam}),
 	 * but a secret can also ride in userinfo credentials ({@code user:pass@host}) or
 	 * under any other param name ({@code ?auth=}, {@code ?sig=}); those never reach

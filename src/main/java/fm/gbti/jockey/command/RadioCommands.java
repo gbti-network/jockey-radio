@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Registers {@code /jocky give [station] [player]} and the dev inspection
- * subcommand {@code /jocky sessions} (both permission level 2).
+ * Registers {@code /jockey give [station] [player]} and the dev inspection
+ * subcommand {@code /jockey sessions} (both permission level 2).
  *
  * <p>The station defaults to the configured default station and the target
  * player defaults to the executing player; the console must name a player.</p>
@@ -40,12 +40,12 @@ public final class RadioCommands {
 
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			// Single consolidated /jocky command tree: bare /jocky opens the admin dialog UI, and
+			// Single consolidated /jockey command tree: bare /jockey opens the admin dialog UI, and
 			// every admin subcommand (give / station / list / reload / sessions / diag / heal) hangs
 			// off it for console/headless use. Gated at op level adminPermissionLevel (default 3 =
 			// LEVEL_ADMINS); the dialog handler re-checks the same gate on every submit.
 			dispatcher.register(
-					Commands.literal("jocky")
+					Commands.literal("jockey")
 							.requires(Commands.hasPermission(adminPermissionCheck()))
 							.executes(RadioCommands::openMenu)
 							.then(Commands.literal("give")
@@ -97,7 +97,7 @@ public final class RadioCommands {
 	}
 
 	/**
-	 * The permission gate for {@code /jocky}, read from config at
+	 * The permission gate for {@code /jockey}, read from config at
 	 * registration ({@code adminPermissionLevel}, default 3). The
 	 * per-submit dialog handler in W2 will re-check the same gate server-side.
 	 */
@@ -228,7 +228,7 @@ public final class RadioCommands {
 		ServerPlayer player = target != null ? target : source.getPlayer();
 		if (player == null) {
 			source.sendFailure(Component.literal(
-					"The console must specify a player: /jocky give <station> <player>"));
+					"The console must specify a player: /jockey give <station> <player>"));
 			return 0;
 		}
 
@@ -254,11 +254,11 @@ public final class RadioCommands {
 	}
 
 	// ------------------------------------------------------------------
-	// /jocky (admin disc registry)
+	// /jockey (admin disc registry)
 	// ------------------------------------------------------------------
 
 	/**
-	 * Opens the {@code /jocky} root dialog for the executing player. Requires
+	 * Opens the {@code /jockey} root dialog for the executing player. Requires
 	 * a player context (the dialog is pushed to a client connection); the console
 	 * uses the give/list/reload subcommands instead.
 	 */
@@ -266,7 +266,7 @@ public final class RadioCommands {
 		ServerPlayer player = ctx.getSource().getPlayer();
 		if (player == null) {
 			ctx.getSource().sendFailure(Component.literal(
-					"Only a player can open the Jockey Radio menu. Use /jocky give|list|reload from the console."));
+					"Only a player can open the Jockey Radio menu. Use /jockey give|list|reload from the console."));
 			return 0;
 		}
 		DialogScreens.send(player, JockeyRadioDialogs.rootMenu(player.registryAccess()));
@@ -288,7 +288,7 @@ public final class RadioCommands {
 		ServerPlayer player = target != null ? target : source.getPlayer();
 		if (player == null) {
 			source.sendFailure(Component.literal(
-					"The console must specify a player: /jocky give <discId> <player>"));
+					"The console must specify a player: /jockey give <discId> <player>"));
 			return 0;
 		}
 

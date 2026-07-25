@@ -7,7 +7,7 @@ import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Thin transport helper for the {@code /jocky} dialog UI.
+ * Thin transport helper for the {@code /jockey} dialog UI.
  *
  * <p>A dialog is pushed to a single player as an <em>inline</em>
  * {@link Holder#direct(Object) direct} holder - it never needs a registry entry

@@ -233,7 +233,7 @@ public final class FeedRegistry {
 
 	/**
 	 * One {@link StationFeed#getStatsLine()} per live feed, for
-	 * {@code /jocky sessions}. The lines are built outside the registry
+	 * {@code /jockey sessions}. The lines are built outside the registry
 	 * lock; safe on any thread.
 	 */
 	public List<String> feedStatsLines() {
@@ -252,7 +252,7 @@ public final class FeedRegistry {
 
 	/**
 	 * One {@link StationFeed#getDiagLine()} per live feed, for the sow-005
-	 * {@code /jocky diag} snapshot. Built outside the registry lock like
+	 * {@code /jockey diag} snapshot. Built outside the registry lock like
 	 * {@link #feedStatsLines()}; safe on any thread.
 	 */
 	public List<String> feedDiagLines() {

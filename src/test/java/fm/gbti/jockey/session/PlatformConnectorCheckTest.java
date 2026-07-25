@@ -68,15 +68,15 @@ class PlatformConnectorCheckTest {
 	static Stream<Arguments> targets() {
 		return Stream.of(
 				new Target("Mixcloud", url("mixcloud",
-						"https://www.mixcloud.com/jockyapp/dust-decibels-memory-leak-full-album/"), false),
+						"https://www.mixcloud.com/jockeyapp/dust-decibels-memory-leak-full-album/"), false),
 				// Forss - "Flickermood": a long-standing Creative Commons track, so the smoke test does
 				// not lean on third-party copyrighted material just to prove the extractor works.
 				new Target("SoundCloud", url("soundcloud",
 						"https://soundcloud.com/forss/flickermood"), false),
 				new Target("Twitch", url("twitch",
-						"https://www.twitch.tv/jockyapp"), true),
+						"https://www.twitch.tv/jockeyapp"), true),
 				new Target("Kick", url("kick",
-						"https://kick.com/jockyapp"), true)
+						"https://kick.com/jockeyapp"), true)
 		).map(Arguments::of);
 	}
 

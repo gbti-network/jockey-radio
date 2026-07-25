@@ -164,7 +164,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	private final boolean tempoMatchEnabled;
 	/**
 	 * The live stretch factor ({@code output/input}) the occupancy servo last set,
-	 * published for {@code /jocky diag}. {@code 1.0} means no stretch. Written once
+	 * published for {@code /jockey diag}. {@code 1.0} means no stretch. Written once
 	 * per servo update by the delivery thread; read on any thread.
 	 */
 	private volatile double currentStretchFactor = 1.0;
@@ -178,7 +178,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * Samples the WSOLA stage currently holds ahead of its analysis cursor - the DSP
 	 * ring depth that sits BEHIND the jitter buffer and adds a small fixed latency the
 	 * jitter-buffer {@code latencyMs} does not include. Published each PLAYING tick in
-	 * TEMPO_MATCH for the {@code /jocky diag} ({@code dspRingMs}); stays 0 in
+	 * TEMPO_MATCH for the {@code /jockey diag} ({@code dspRingMs}); stays 0 in
 	 * REBUFFER. Delivery-thread write, any-thread read (diagnostic only).
 	 */
 	private volatile int stretchRingSamples;
@@ -323,7 +323,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 
 	/**
 	 * Small ring of recent buffered-frame occupancy (one sample/second) for the
-	 * {@code /jocky diag} min/max/avg note. Guarded by {@link #occupancyLock}.
+	 * {@code /jockey diag} min/max/avg note. Guarded by {@link #occupancyLock}.
 	 */
 	private final int[] occupancySamples = new int[OCCUPANCY_WINDOW_SAMPLES];
 	private int occupancyCount;
@@ -531,7 +531,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * <p>Audit fix: previously each subclass had to remember to store
 	 * {@code endpoint.secret()} AND override {@code sanitize}. {@link HlsPullFeed} did;
 	 * {@link FileLoopFeed} and {@link LinkResolvedFeed} did not, so a FILE disc whose
-	 * URL carried a token printed it verbatim in {@code /jocky diag} (gated only at
+	 * URL carried a token printed it verbatim in {@code /jockey diag} (gated only at
 	 * gamemaster level, BELOW the admin gate that protects the disc UI) and in the
 	 * reconnect WARN line. Registering by construction removes the chance to forget.</p>
 	 */
@@ -866,7 +866,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	}
 
 	/**
-	 * A richer one-line snapshot for {@code /jocky diag} (sow-005 Phase 0):
+	 * A richer one-line snapshot for {@code /jockey diag} (sow-005 Phase 0):
 	 * everything in {@link #getStatsLine()} plus the rolling dropped-FRAME count
 	 * ({@code dropsLast60s}, all causes, for drop/bandwidth accounting), the glitch
 	 * EVENT total and rolling glitch-EVENT rate ({@code glitchEvents} /
@@ -1660,7 +1660,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 
 			long now = System.nanoTime();
 			if (now - lastOccupancy >= 1_000_000_000L) {
-				// One buffered-occupancy sample per second for the /jocky diag
+				// One buffered-occupancy sample per second for the /jockey diag
 				// min/max/avg note (a small ring; cheap).
 				long nanoDeltaMs = (now - lastOccupancy) / 1_000_000L;
 				lastOccupancy = now;

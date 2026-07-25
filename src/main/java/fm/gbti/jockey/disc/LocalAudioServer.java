@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
  * one over HTTP - WITHOUT ever whitelisting {@code file:} in ffmpeg (the
  * {@link fm.gbti.jockey.session.HlsPullFeed}/{@code FileLoopFeed} guardrail: a stream
  * must never turn ffmpeg into a local-file reader). The admin picks a file in
- * {@code /jocky}; the disc's {@code streamUrl} becomes {@link #urlFor}.
+ * {@code /jockey}; the disc's {@code streamUrl} becomes {@link #urlFor}.
  *
  * <p>Hardening: bound to {@code 127.0.0.1} only; serves GET (+ HEAD) exclusively; every
  * request path is decoded, stripped to a bare file name, and re-resolved strictly INSIDE

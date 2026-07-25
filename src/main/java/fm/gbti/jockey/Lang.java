@@ -4,7 +4,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
 /**
- * Tiny i18n seam for the {@code /jocky} dialogs and commands. Every
+ * Tiny i18n seam for the {@code /jockey} dialogs and commands. Every
  * user-facing string carries both a translation key (resolved from
  * {@code assets/jockey_radio/lang/en_us.json} by clients that have the mod)
  * and a literal fallback.

@@ -54,14 +54,14 @@ public final class DiscRegistry {
 	 * entries. While set, the registry is READ-ONLY: a save would atomically overwrite the
 	 * operator's file without the definitions that failed to load, destroying tokens and
 	 * stream keys that exist nowhere else. Cleared by the next fully successful load, so
-	 * fixing the file and running {@code /jocky reload} restores normal operation.
+	 * fixing the file and running {@code /jockey reload} restores normal operation.
 	 */
 	private volatile boolean loadFailed;
 
 	/** Shown to the admin when a mutation is refused because the on-disk registry is unreadable. */
 	private static final String READ_ONLY_REASON =
 			FILE_NAME + " could not be fully read, so saving is disabled to protect the discs already in it. "
-					+ "Fix or remove that file, then run /jocky reload.";
+					+ "Fix or remove that file, then run /jockey reload.";
 
 	/** Sentinel {@link #remove} returns when the disc id does not exist; the caller renders the id safely. */
 	public static final String NOT_FOUND_MARKER = "\u0000not-found";
@@ -105,7 +105,7 @@ public final class DiscRegistry {
 	/**
 	 * Loads the registry from disk, replacing the in-memory contents. A missing file is a
 	 * clean empty registry. A whole-file parse failure logs, KEEPS the discs already loaded
-	 * (so a bad {@code /jocky reload} does not silence live playback), and latches the
+	 * (so a bad {@code /jockey reload} does not silence live playback), and latches the
 	 * registry {@linkplain #isReadOnly() read-only} so no save overwrites the unreadable file.
 	 * Individually-rejected entries (bad {@code discId}, failing {@link DiscDefinition#validate()},
 	 * duplicate id) are dropped with a warning and ALSO latch read-only, because a later save
@@ -115,7 +115,7 @@ public final class DiscRegistry {
 		Path path = file();
 		if (Files.notExists(path)) {
 			// A missing file is a well-defined EMPTY registry, not an unreadable one - clear the
-			// read-only latch so the documented "remove the broken file, then /jocky reload"
+			// read-only latch so the documented "remove the broken file, then /jockey reload"
 			// recovery actually restores write access instead of latching forever.
 			replaceAll(new LinkedHashMap<>());
 			loadFailed = false;
@@ -134,7 +134,7 @@ public final class DiscRegistry {
 			// A whole-file parse failure: latch read-only and DO NOT touch the live map. The
 			// previous version replaced it with an empty map here, which fired the change
 			// listener and turned every currently-playing registry disc inert on a bad
-			// /jocky reload. Keeping the last-good map means playback survives a bad reload,
+			// /jockey reload. Keeping the last-good map means playback survives a bad reload,
 			// and loadFailed still blocks any save from overwriting the unreadable file.
 			loadFailed = true;
 			JockeyRadioMod.LOGGER.error(
@@ -153,7 +153,7 @@ public final class DiscRegistry {
 			JockeyRadioMod.LOGGER.error(
 					"[jockey] {} loaded with {} valid disc(s) but some entries were rejected (see warnings above) "
 							+ "- saves are DISABLED so the rejected entries are not lost. Fix or remove them, then "
-							+ "/jocky reload.", FILE_NAME, fresh.size());
+							+ "/jockey reload.", FILE_NAME, fresh.size());
 		} else {
 			JockeyRadioMod.LOGGER.info("[jockey] loaded {} disc(s) from {}", fresh.size(), path);
 		}
@@ -228,7 +228,7 @@ public final class DiscRegistry {
 		return dropped;
 	}
 
-	/** Reload = load. Kept as a named entry point for {@code /jocky reload}. */
+	/** Reload = load. Kept as a named entry point for {@code /jockey reload}. */
 	public void reload() {
 		load();
 	}

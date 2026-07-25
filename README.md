@@ -31,7 +31,7 @@ The disc identity travels in the disc's `custom_data` component
 (HLS access tokens, RTMP stream keys) live only in the server-side config/registry and
 **never enter item NBT**. Discs made on earlier builds (the `travelers_jukebox` and
 `savepoint_radio` eras) still resolve through a legacy-namespace fallback, and
-`/jocky heal` re-stamps them into the current namespace in place.
+`/jockey heal` re-stamps them into the current namespace in place.
 
 ### How a session works
 
@@ -92,7 +92,7 @@ ffmpeg process and one audio feed (`FeedRegistry`); the last jukebox leaving sto
 4. Start the server once. It writes default config to `config/jockey_radio.json` (no
    stations by default) and creates `config/jockey_radio/discs.json` on first admin disc
    save.
-5. As an operator, run `/jocky` to open the admin UI and create your first disc.
+5. As an operator, run `/jockey` to open the admin UI and create your first disc.
 
 Building from source:
 
@@ -148,25 +148,25 @@ server.
 
 ## Admin UI and commands
 
-### `/jocky` - dialog admin UI (op level 3 by default)
+### `/jockey` - dialog admin UI (op level 3 by default)
 
-Running `/jocky` as a player opens a vanilla **dialog UI** (no client mod required, it
+Running `/jockey` as a player opens a vanilla **dialog UI** (no client mod required, it
 uses vanilla `server.dialog.*`) to create, browse, edit, give, **test**, and delete radio
 discs. The permission gate is `adminPermissionLevel` (default `3` = `LEVEL_ADMINS`) and is
 re-checked server-side on every dialog submit. Connection info (RTMP ingest URL, stream
 key) is serialized only into that one admin's dialog packet, never logged.
 
-Console / headless subcommands (all under `/jocky`):
+Console / headless subcommands (all under `/jockey`):
 
 | Command                              | Purpose                                          |
 | ------------------------------------ | ------------------------------------------------ |
-| `/jocky give <discId> [player]`      | Give an admin registry disc                      |
-| `/jocky station [key] [player]`      | Give a disc for a **config** station             |
-| `/jocky list`                        | List all registry discs (secrets masked)         |
-| `/jocky reload`                      | Reload `discs.json` from disk                    |
-| `/jocky sessions`                    | List tracked sessions + live feed stats          |
-| `/jocky diag`                        | Per-feed diagnostics (frames, drops, buffer, reconnects, ...) |
-| `/jocky heal`                        | Re-stamp placed discs from the registry (fixes discs made on an earlier build) |
+| `/jockey give <discId> [player]`      | Give an admin registry disc                      |
+| `/jockey station [key] [player]`      | Give a disc for a **config** station             |
+| `/jockey list`                        | List all registry discs (secrets masked)         |
+| `/jockey reload`                      | Reload `discs.json` from disk                    |
+| `/jockey sessions`                    | List tracked sessions + live feed stats          |
+| `/jockey diag`                        | Per-feed diagnostics (frames, drops, buffer, reconnects, ...) |
+| `/jockey heal`                        | Re-stamp placed discs from the registry (fixes discs made on an earlier build) |
 
 ---
 
@@ -190,9 +190,9 @@ values log a warning and fall back to the default):
 
   "useRawBroadcastPath": true,    // raw /radio/broadcast path vs Direct Stream Access
   "rtmpPublicHost": null,         // bare host[:port] for external RTMP ingest (no scheme/path)
-  "adminPermissionLevel": 3,      // op level required by /jocky (0..4)
+  "adminPermissionLevel": 3,      // op level required by /jockey (0..4)
   "nowPlayingPollSeconds": 15,    // 0 disables the LIVE indicator; else 5..3600
-  "monitorSeconds": 90,           // /jocky "Test" audible-monitor auto-stop (10..600)
+  "monitorSeconds": 90,           // /jockey "Test" audible-monitor auto-stop (10..600)
   "nowPlayingHud": true,          // server-side NOW-PLAYING boss bar on/off
   "nowPlayingHudMode": "beacon",  // "beacon" (needs a trigger block) or "always"
   "suppressGameMusic": true,      // duck vanilla music near a playing jukebox
@@ -211,7 +211,7 @@ is left untouched) so the server keeps running.
 
 ### `config/jockey_radio/discs.json` (server)
 
-The admin disc registry, written/read by the `/jocky` UI. Each entry is a `DiscDefinition`
+The admin disc registry, written/read by the `/jockey` UI. Each entry is a `DiscDefinition`
 (id, display name, colour, base disc item, source type + fields, radius). Hand-editable;
 validated on load with bad entries dropped and logged. Written atomically. Uploaded audio
 files for FILE discs live alongside in `config/jockey_radio/audio/`.
@@ -234,7 +234,7 @@ optionally only while connected to the SVC server).
   default; `beacon` mode gates it behind a nearby trigger block.
 - **LIVE now-playing indicator** - polls each HLS disc's `/api/public/stations/<id>/now-playing`
   endpoint for the live flag + current track (needs a now-playing token).
-- **Audible monitor** (`/jocky` -> "Test") - lets an admin privately hear a disc's feed
+- **Audible monitor** (`/jockey` -> "Test") - lets an admin privately hear a disc's feed
   without a jukebox, auto-stopping after `monitorSeconds`.
 - **Music ducking (client, optional)** - if the mod is installed client-side, vanilla music
   smoothly ducks near a playing jukebox. Purely local; the dedicated server neither reads

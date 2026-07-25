@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Server-side coordinator for the on-demand AUDIBLE MONITOR behind the
- * {@code /jocky} "Test" button: it lets an admin hear a disc's feed
+ * {@code /jockey} "Test" button: it lets an admin hear a disc's feed
  * privately - no jukebox - with a boss-bar level meter, then auto-stops.
  *
  * <p>One monitor per admin. {@link #start(ServerPlayer, String)} acquires the

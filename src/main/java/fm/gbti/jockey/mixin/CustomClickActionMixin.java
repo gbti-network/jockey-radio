@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Routes {@code jockey_radio:*} custom-click actions (the {@code /jocky}
+ * Routes {@code jockey_radio:*} custom-click actions (the {@code /jockey}
  * dialog buttons) into {@link DialogRouter}.
  *
  * <p>{@code handleCustomClickAction} is defined only on the common listener, so

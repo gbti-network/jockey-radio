@@ -246,7 +246,7 @@ public final class DiscDefinition {
 		if (name == null || name.isEmpty() || name.length() > 48) {
 			return Optional.of("name must be 1..48 characters");
 		}
-		// The name is rendered verbatim (/jocky list, the give message) and
+		// The name is rendered verbatim (/jockey list, the give message) and
 		// written into the item name component. Control characters (newlines etc.)
 		// and the legacy section sign let a hostile name inject apparent output
 		// lines or colour codes, so reject them - matching the character discipline

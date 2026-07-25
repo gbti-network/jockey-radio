@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * Jockey Radio - server-side streaming radio jukebox discs.
  *
  * <p>Phase 1: config, bundled data-driven jukebox song, disc factory and the
- * {@code /jocky} command. Phase 2: jukebox mixins plus the disc-presence
+ * {@code /jockey} command. Phase 2: jukebox mixins plus the disc-presence
  * session core ({@link RadioManager}) - no audio yet. Later phases add the
  * station feeds and the Simple Voice Chat audio bridge.</p>
  */

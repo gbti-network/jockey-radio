@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * Fire-and-forget reachability probe behind the {@code /jocky} "Test feed"
+ * Fire-and-forget reachability probe behind the {@code /jockey} "Test feed"
  * button. Runs entirely on mod-owned daemon threads - never the server thread -
  * and hands the caller a {@link Result} to deliver from a
  * {@code server.execute(...)} continuation.

@@ -169,7 +169,7 @@ public final class RadioConfig {
 
 	/**
 	 * Station keys must stay parseable by Brigadier's
-	 * {@code StringArgumentType.word()} ({@code /jocky give <station>}),
+	 * {@code StringArgumentType.word()} ({@code /jockey give <station>}),
 	 * which only accepts these characters.
 	 */
 	private static final Pattern VALID_KEY = Pattern.compile("[A-Za-z0-9_.+-]+");
@@ -401,7 +401,7 @@ public final class RadioConfig {
 	/**
 	 * Public host (bare {@code host} or {@code host:port} authority, no scheme,
 	 * no path) an external DJ/OBS uses to reach an RTMP-receive disc that binds
-	 * {@code 0.0.0.0}. Optional and {@code null} by default: the {@code /jocky}
+	 * {@code 0.0.0.0}. Optional and {@code null} by default: the {@code /jockey}
 	 * disc detail page always shows the local {@code rtmp://127.0.0.1:<port>/live}
 	 * ingest, and additionally an external {@code rtmp://<rtmpPublicHost>/live}
 	 * form only when this is set and the disc binds all interfaces. A value with
@@ -410,7 +410,7 @@ public final class RadioConfig {
 	 */
 	public String rtmpPublicHost = null;
 	/**
-	 * Op permission level the {@code /jocky} admin tree requires (0..4;
+	 * Op permission level the {@code /jockey} admin tree requires (0..4;
 	 * default 3 = {@code Commands.LEVEL_ADMINS}). Clamped into range on load.
 	 */
 	public int adminPermissionLevel = 3;
@@ -427,7 +427,7 @@ public final class RadioConfig {
 	 */
 	public int nowPlayingPollSeconds = 15;
 	/**
-	 * How long (seconds) the {@code /jocky} "Test" audible monitor plays a
+	 * How long (seconds) the {@code /jockey} "Test" audible monitor plays a
 	 * disc's feed to the admin before it auto-stops. Default 90; clamped 10..600
 	 * on load. Bounds the transient feed lease and boss bar a monitor holds so a
 	 * forgotten monitor never streams indefinitely.
@@ -693,7 +693,7 @@ public final class RadioConfig {
 				Station station = entry.getValue();
 				if (key == null || !VALID_KEY.matcher(key).matches()) {
 					JockeyRadioMod.LOGGER.warn(
-							"Ignoring station '{}' in {}: keys must match [A-Za-z0-9_.+-]+ to be usable in /jocky",
+							"Ignoring station '{}' in {}: keys must match [A-Za-z0-9_.+-]+ to be usable in /jockey",
 							key, FILE_NAME);
 					return true;
 				}
@@ -1039,7 +1039,7 @@ public final class RadioConfig {
 		RadioConfig config = new RadioConfig();
 		// Jockey Radio is standalone: a fresh config ships with NO stations, so nothing
 		// implies an external broadcasting service is required. Operators add their own config
-		// stations (SavePoint or any m3u8) or, more commonly, create discs via /jocky. See
+		// stations (SavePoint or any m3u8) or, more commonly, create discs via /jockey. See
 		// docs for an example SavePoint station block.
 		// Write the jitter-buffer keys explicitly so a freshly generated file shows
 		// them (and so a reload sees them as present, not migrated defaults).

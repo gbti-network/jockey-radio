@@ -24,7 +24,7 @@ import java.util.Optional;
 
 /**
  * Server-side handler for the {@code jockey_radio:*} custom-click actions the
- * {@code /jocky} dialogs emit. Invoked from
+ * {@code /jockey} dialogs emit. Invoked from
  * {@code CustomClickActionMixin} on the main server thread (past
  * {@code ensureRunningOnSameThread}), so every {@link DiscRegistry} write and
  * item give here is already on the server thread.
@@ -742,7 +742,7 @@ public final class DialogRouter {
 	// helpers
 	// ------------------------------------------------------------------
 
-	/** Re-checks the same op gate as {@code /jocky} against this player. */
+	/** Re-checks the same op gate as {@code /jockey} against this player. */
 	private static boolean hasAdminPermission(ServerPlayer player) {
 		int level = RadioConfig.get().adminPermissionLevel;
 		PermissionCheck check = new PermissionCheck.Require(
