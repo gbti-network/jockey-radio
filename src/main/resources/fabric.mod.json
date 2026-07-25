@@ -1,19 +1,19 @@
 {
 	"schemaVersion": 1,
-	"id": "savepoint_radio",
+	"id": "travelers_jukebox",
 	"version": "${version}",
-	"name": "SavePoint Radio",
-	"description": "Vanilla-safe music discs that stream live radio into any jukebox as positional Simple Voice Chat audio. Server-side, ffmpeg-backed HLS and RTMP ingest.",
+	"name": "Traveler's Jukebox",
+	"description": "Turn any Minecraft jukebox into a live broadcasting endpoint. Play internet radio, livestreams, SoundCloud/Mixcloud, direct audio URLs, and uploaded files through music discs as positional Simple Voice Chat audio. Server-side; with native SavePoint broadcasting integration.",
 	"authors": [
-		"SavePoint.fm"
+		"GBTI Network"
 	],
 	"contact": {
-		"homepage": "https://savepoint.fm",
-		"sources": "https://github.com/savepoint-fm/minecraft-savepoint-radio",
-		"issues": "https://github.com/savepoint-fm/minecraft-savepoint-radio/issues"
+		"homepage": "https://jukebox.fm",
+		"sources": "https://github.com/gbti-network/minecraft-mod-travelers-jukebox",
+		"issues": "https://github.com/gbti-network/minecraft-mod-travelers-jukebox/issues"
 	},
 	"license": "ARR",
-	"icon": "assets/savepoint_radio/icon.png",
+	"icon": "assets/travelers_jukebox/icon.png",
 	"environment": "server",
 	"entrypoints": {
 		"main": [
@@ -24,7 +24,7 @@
 		]
 	},
 	"mixins": [
-		"savepoint_radio.mixins.json"
+		"travelers_jukebox.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.3",

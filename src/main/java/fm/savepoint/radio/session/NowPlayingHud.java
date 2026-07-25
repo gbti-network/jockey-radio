@@ -138,7 +138,7 @@ public final class NowPlayingHud {
 			try {
 				advanceMarquee();
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] now-playing marquee failed", t);
+				SavePointRadioMod.LOGGER.warn("[jukebox] now-playing marquee failed", t);
 			}
 		}
 		if (++ticksSinceScan >= SCAN_INTERVAL_TICKS) {
@@ -146,7 +146,7 @@ public final class NowPlayingHud {
 			try {
 				scan(server);
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] now-playing hud sweep failed", t);
+				SavePointRadioMod.LOGGER.warn("[jukebox] now-playing hud sweep failed", t);
 			}
 		}
 	}
@@ -208,7 +208,7 @@ public final class NowPlayingHud {
 				}
 				refreshName(bar, session);
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] now-playing hud refresh failed station={}",
+				SavePointRadioMod.LOGGER.warn("[jukebox] now-playing hud refresh failed station={}",
 						session.stationKey(), t);
 			}
 		}
@@ -238,7 +238,7 @@ public final class NowPlayingHud {
 					wanted.computeIfAbsent(nearest.pos(), k -> new HashSet<>()).add(player);
 				}
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] now-playing hud membership failed player={}",
+				SavePointRadioMod.LOGGER.warn("[jukebox] now-playing hud membership failed player={}",
 						player.getName().getString(), t);
 			}
 		}
@@ -388,7 +388,7 @@ public final class NowPlayingHud {
 		// Static full bar - the now-playing record carries no elapsed/duration, so
 		// there is nothing meaningful to fill partially.
 		event.setProgress(1.0f);
-		SavePointRadioMod.LOGGER.info("[radio] now-playing hud show {} station={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] now-playing hud show {} station={}",
 				session.describePos(), session.stationKey());
 		return new Bar(event);
 	}
@@ -488,7 +488,7 @@ public final class NowPlayingHud {
 			bar.event.removeAllPlayers();
 			bar.event.setVisible(false);
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] now-playing hud teardown failed", t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] now-playing hud teardown failed", t);
 		}
 	}
 
@@ -497,7 +497,7 @@ public final class NowPlayingHud {
 			teardownBar(bar);
 		}
 		bars.clear();
-		SavePointRadioMod.LOGGER.info("[radio] now-playing hud cleared ({})", reason);
+		SavePointRadioMod.LOGGER.info("[jukebox] now-playing hud cleared ({})", reason);
 	}
 
 	/**

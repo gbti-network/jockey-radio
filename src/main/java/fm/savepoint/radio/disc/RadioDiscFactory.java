@@ -25,15 +25,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Builds SavePoint Radio disc item stacks.
+ * Builds Traveler's Jukebox disc item stacks.
  *
  * <p>The disc is a vanilla {@code music_disc_13} whose {@code jukebox_playable}
- * component points at the bundled {@code savepoint_radio:radio} jukebox song.
- * That song's sound event ({@code savepoint_radio:radio_stream}) deliberately
+ * component points at the bundled {@code travelers_jukebox:radio} jukebox song.
+ * That song's sound event ({@code travelers_jukebox:radio_stream}) deliberately
  * has no {@code sounds.json} entry anywhere, so vanilla clients resolve nothing
  * and play silence - the actual audio arrives via voice chat in later phases.
  * The target station key travels in the {@code custom_data} component as
- * {@code {"savepoint_radio": {"station": "<key>"}}}.</p>
+ * {@code {"travelers_jukebox": {"station": "<key>"}}}.</p>
  */
 public final class RadioDiscFactory {
 
@@ -52,7 +52,7 @@ public final class RadioDiscFactory {
 	 *                   (e.g. {@code source.registryAccess()})
 	 * @param stationKey config key of the station
 	 * @param station    the station definition
-	 * @return the disc, or empty if the {@code savepoint_radio:radio} jukebox
+	 * @return the disc, or empty if the {@code travelers_jukebox:radio} jukebox
 	 *         song is not present in the datapack registry
 	 */
 	public static Optional<ItemStack> createDisc(HolderLookup.Provider registries, String stationKey,
@@ -72,7 +72,7 @@ public final class RadioDiscFactory {
 
 		MutableComponent name = Component.literal(displayName)
 				.withStyle(style -> style.withColor(TextColor.fromRgb(NAME_COLOR)).withItalic(false))
-				.append(Component.literal(" — SavePoint Radio")
+				.append(Component.literal(" — Traveler's Jukebox")
 						.withStyle(style -> style.withColor(TextColor.fromRgb(LORE_COLOR)).withItalic(false)));
 		stack.set(DataComponents.ITEM_NAME, name);
 
@@ -92,12 +92,12 @@ public final class RadioDiscFactory {
 	/**
 	 * Builds an admin disc from a {@link DiscDefinition}: a chosen base vanilla
 	 * disc, an RGB-colored {@code item_name} from the definition's name/color,
-	 * the bundled silent {@code savepoint_radio:radio} jukebox song, and
+	 * the bundled silent {@code travelers_jukebox:radio} jukebox song, and
 	 * {@code custom_data} carrying ONLY the stable {@code disc_id}. Feed details
 	 * (host, token, stream key, ...) stay server-side in the registry and never
 	 * enter item NBT.
 	 *
-	 * @return the disc, or empty if the {@code savepoint_radio:radio} jukebox
+	 * @return the disc, or empty if the {@code travelers_jukebox:radio} jukebox
 	 *         song is not present in the datapack registry
 	 */
 	public static Optional<ItemStack> createFromDefinition(HolderLookup.Provider registries, DiscDefinition def) {
@@ -175,13 +175,13 @@ public final class RadioDiscFactory {
 
 	/**
 	 * Reads the admin {@code disc_id} back out of a disc's {@code custom_data},
-	 * if present ({@code custom_data.savepoint_radio.disc}).
+	 * if present ({@code custom_data.travelers_jukebox.disc}).
 	 */
 	public static Optional<String> readDiscId(ItemStack stack) {
 		return readInner(stack, "disc");
 	}
 
-	/** True for any SavePoint Radio disc (admin disc id or config station key). */
+	/** True for any Traveler's Jukebox disc (admin disc id or config station key). */
 	public static boolean isRadioDisc(ItemStack stack) {
 		return readDiscId(stack).isPresent() || readStationKey(stack).isPresent();
 	}

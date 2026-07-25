@@ -23,8 +23,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Server-side handler for the {@code savepoint_radio:*} custom-click actions the
- * {@code /savepoint} dialogs emit. Invoked from
+ * Server-side handler for the {@code travelers_jukebox:*} custom-click actions the
+ * {@code /jukebox} dialogs emit. Invoked from
  * {@code CustomClickActionMixin} on the main server thread (past
  * {@code ensureRunningOnSameThread}), so every {@link DiscRegistry} write and
  * item give here is already on the server thread.
@@ -89,7 +89,7 @@ public final class DialogRouter {
 				if (!RadioConfig.get().enablePlatformLinks) {
 					DialogScreens.send(player, SavePointDialogs.errorThen("Platform links disabled",
 							"Platform links are turned off on this server. An operator can enable them by "
-									+ "setting enablePlatformLinks to true in savepoint_radio.json.",
+									+ "setting enablePlatformLinks to true in travelers_jukebox.json.",
 							"new_disc", ""));
 				} else {
 					DialogScreens.send(player,
@@ -314,7 +314,7 @@ public final class DialogRouter {
 		if ("platform".equals(source) && !RadioConfig.get().enablePlatformLinks) {
 			DialogScreens.send(player, SavePointDialogs.errorThen("Platform links disabled",
 					"Platform links are turned off on this server, so this disc was not saved. An operator "
-							+ "can enable them by setting enablePlatformLinks to true in savepoint_radio.json.",
+							+ "can enable them by setting enablePlatformLinks to true in travelers_jukebox.json.",
 					"manage", ""));
 			return;
 		}
@@ -712,7 +712,7 @@ public final class DialogRouter {
 		Optional<ItemStack> disc = RadioDiscFactory.createFromDefinition(target.registryAccess(), def.get());
 		if (disc.isEmpty()) {
 			DialogScreens.send(player, SavePointDialogs.errorThen("Could not create disc",
-					"The 'savepoint_radio:radio' jukebox song is not loaded.", errBack, errBackId));
+					"The 'travelers_jukebox:radio' jukebox song is not loaded.", errBack, errBackId));
 			return;
 		}
 		if (!target.addItem(disc.get())) {
@@ -742,7 +742,7 @@ public final class DialogRouter {
 	// helpers
 	// ------------------------------------------------------------------
 
-	/** Re-checks the same op gate as {@code /savepoint} against this player. */
+	/** Re-checks the same op gate as {@code /jukebox} against this player. */
 	private static boolean hasAdminPermission(ServerPlayer player) {
 		int level = RadioConfig.get().adminPermissionLevel;
 		PermissionCheck check = new PermissionCheck.Require(

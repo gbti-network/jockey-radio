@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class VoiceChatBackend {
 
 	/** Volume category id channels are tagged with (client-side volume slider). */
-	static final String CATEGORY_ID = "savepoint_radio";
+	static final String CATEGORY_ID = "travelers_jukebox";
 
 	private static volatile VoicechatServerApi serverApi;
 	private static volatile boolean categoryRegistered;
@@ -89,7 +89,7 @@ final class VoiceChatBackend {
 					UUID.randomUUID(), api.fromServerLevel(level), center);
 			if (channel == null) {
 				SavePointRadioMod.LOGGER.warn(
-						"[radio] voicechat channel creation returned null {} station={}",
+						"[jukebox] voicechat channel creation returned null {} station={}",
 						describePos(pos), stationKey);
 				return null;
 			}
@@ -106,7 +106,7 @@ final class VoiceChatBackend {
 				} catch (Throwable ignored) {
 				}
 			}
-			SavePointRadioMod.LOGGER.error("[radio] voicechat sink creation failed {} station={}",
+			SavePointRadioMod.LOGGER.error("[jukebox] voicechat sink creation failed {} station={}",
 					describePos(pos), stationKey, t);
 			return null;
 		}
@@ -145,7 +145,7 @@ final class VoiceChatBackend {
 					UUID.randomUUID(), api.fromServerLevel(level), connection);
 			if (channel == null) {
 				SavePointRadioMod.LOGGER.warn(
-						"[radio] voicechat monitor channel creation returned null station={}", discLabel);
+						"[jukebox] voicechat monitor channel creation returned null station={}", discLabel);
 				return null;
 			}
 			if (categoryRegistered) {
@@ -160,7 +160,7 @@ final class VoiceChatBackend {
 				} catch (Throwable ignored) {
 				}
 			}
-			SavePointRadioMod.LOGGER.error("[radio] voicechat monitor sink creation failed station={}", discLabel, t);
+			SavePointRadioMod.LOGGER.error("[jukebox] voicechat monitor sink creation failed station={}", discLabel, t);
 			return null;
 		}
 	}
@@ -185,7 +185,7 @@ final class VoiceChatBackend {
 			} catch (Throwable t) {
 				if (hqFallbackLogged.compareAndSet(false, true)) {
 					SavePointRadioMod.LOGGER.warn(
-							"[radio] high-quality Opus encoder init failed (opusBitrate={}); falling back to "
+							"[jukebox] high-quality Opus encoder init failed (opusBitrate={}); falling back to "
 									+ "the SVC voice encoder for radio channels", config.opusBitrate, t);
 				}
 			}

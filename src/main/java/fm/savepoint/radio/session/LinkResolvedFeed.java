@@ -172,7 +172,7 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 			// One line per successful (re)resolve: confirms is_live, the chosen protocol (so a source
 			// that only offers DASH - which this ffmpeg build cannot demux - is visible in the log),
 			// and that we get the best audio abr.
-			SavePointRadioMod.LOGGER.info("[radio] platform resolved station={} live={} proto={} abr={}kbps link={}",
+			SavePointRadioMod.LOGGER.info("[jukebox] platform resolved station={} live={} proto={} abr={}kbps link={}",
 					stationKey(), lastResolvedLive, resolved.proto(), resolved.abr(), displayUrl);
 			return resolved.url();
 		} catch (InterruptedException e) {
@@ -250,7 +250,7 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		if (!loggedResolveFailure) {
 			loggedResolveFailure = true;
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] yt-dlp could not resolve station={} link={} ({}) - is '{}' installed and current? "
+					"[jukebox] yt-dlp could not resolve station={} link={} ({}) - is '{}' installed and current? "
 							+ "retrying on the reconnect ladder",
 					stationKey(), displayUrl, why, ytdlpBinary);
 		}

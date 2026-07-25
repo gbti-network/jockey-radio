@@ -22,16 +22,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * SavePoint Radio - server-side streaming radio jukebox discs.
+ * Traveler's Jukebox - server-side streaming radio jukebox discs.
  *
  * <p>Phase 1: config, bundled data-driven jukebox song, disc factory and the
- * {@code /radiodisc} command. Phase 2: jukebox mixins plus the disc-presence
+ * {@code /jukeboxdisc} command. Phase 2: jukebox mixins plus the disc-presence
  * session core ({@link RadioManager}) - no audio yet. Later phases add the
  * station feeds and the Simple Voice Chat audio bridge.</p>
  */
 public final class SavePointRadioMod implements ModInitializer {
 
-	public static final String MOD_ID = "savepoint_radio";
+	public static final String MOD_ID = "travelers_jukebox";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	@Override
@@ -49,18 +49,18 @@ public final class SavePointRadioMod implements ModInitializer {
 		DiscRegistry.get().setChangeListener(() -> RadioManager.get().onDiscsChanged());
 		RadioCommands.register();
 		registerSessionLifecycle();
-		LOGGER.info("SavePoint Radio initialized ({} station(s), default station '{}')",
-				config.stations.size(), config.defaultStation);
+		LOGGER.info("Traveler's Jukebox initialized ({} config station(s), default station '{}')",
+				config.stations.size(), config.defaultStation == null ? "none" : config.defaultStation);
 		// sow-013: state the platform gate every boot. An existing config file is never rewritten
 		// when new keys are added, so an UPGRADING operator would otherwise have no way to discover
 		// that enablePlatformLinks exists - and a gate nobody can find defeats the point of asking
 		// them to opt in deliberately.
 		if (config.enablePlatformLinks) {
-			LOGGER.warn("[radio] platform links are ENABLED - you are responsible for holding the rights "
+			LOGGER.warn("[jukebox] platform links are ENABLED - you are responsible for holding the rights "
 					+ "to rebroadcast any third-party content you link on this server.");
 		} else {
-			LOGGER.info("[radio] platform links are disabled (default). Set enablePlatformLinks=true in "
-					+ "savepoint_radio.json to enable SoundCloud/Mixcloud/Bandcamp/Twitch/Kick discs.");
+			LOGGER.info("[jukebox] platform links are disabled (default). Set enablePlatformLinks=true in "
+					+ "travelers_jukebox.json to enable SoundCloud/Mixcloud/Bandcamp/Twitch/Kick discs.");
 		}
 		// Report what this host actually permits (process spawning / executing a binary we place on
 		// disk / whether ffmpeg is present). On a managed host with no shell this log is the only way

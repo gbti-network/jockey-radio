@@ -21,11 +21,11 @@ import java.util.concurrent.Executors;
 
 /**
  * sow-009 (P3): a tiny loopback-only, read-only HTTP server that exposes the audio
- * files in {@code <configDir>/savepoint_radio/audio/} so a {@code FILE} disc can loop
+ * files in {@code <configDir>/travelers_jukebox/audio/} so a {@code FILE} disc can loop
  * one over HTTP - WITHOUT ever whitelisting {@code file:} in ffmpeg (the
  * {@link fm.savepoint.radio.session.HlsPullFeed}/{@code FileLoopFeed} guardrail: a stream
  * must never turn ffmpeg into a local-file reader). The admin picks a file in
- * {@code /savepoint}; the disc's {@code streamUrl} becomes {@link #urlFor}.
+ * {@code /jukebox}; the disc's {@code streamUrl} becomes {@link #urlFor}.
  *
  * <p>Hardening: bound to {@code 127.0.0.1} only; serves GET (+ HEAD) exclusively; every
  * request path is decoded, stripped to a bare file name, and re-resolved strictly INSIDE
@@ -38,7 +38,7 @@ public final class LocalAudioServer {
 
 	private static final LocalAudioServer INSTANCE = new LocalAudioServer();
 
-	private static final String DIR_NAME = "savepoint_radio";
+	private static final String DIR_NAME = "travelers_jukebox";
 	private static final String AUDIO_DIR = "audio";
 	private static final Set<String> AUDIO_EXTS =
 			Set.of("mp3", "ogg", "oga", "opus", "wav", "flac", "m4a", "aac", "mp4");
@@ -54,7 +54,7 @@ public final class LocalAudioServer {
 		return INSTANCE;
 	}
 
-	/** The audio folder ({@code <configDir>/savepoint_radio/audio}). */
+	/** The audio folder ({@code <configDir>/travelers_jukebox/audio}). */
 	public static Path audioDir() {
 		return FabricLoader.getInstance().getConfigDir().resolve(DIR_NAME).resolve(AUDIO_DIR);
 	}
@@ -97,12 +97,12 @@ public final class LocalAudioServer {
 			s.start();
 			this.server = s;
 			this.port = s.getAddress().getPort();
-			SavePointRadioMod.LOGGER.info("[radio] local audio server on 127.0.0.1:{} serving {} ({} file(s))",
+			SavePointRadioMod.LOGGER.info("[jukebox] local audio server on 127.0.0.1:{} serving {} ({} file(s))",
 					port, audioRoot, listAudioFiles().size());
 		} catch (Throwable t) {
 			this.server = null;
 			this.port = 0;
-			SavePointRadioMod.LOGGER.warn("[radio] local audio server failed to start; file-folder discs disabled", t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] local audio server failed to start; file-folder discs disabled", t);
 		}
 	}
 

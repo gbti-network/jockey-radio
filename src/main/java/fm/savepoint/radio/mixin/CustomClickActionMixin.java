@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Routes {@code savepoint_radio:*} custom-click actions (the {@code /savepoint}
+ * Routes {@code travelers_jukebox:*} custom-click actions (the {@code /jukebox}
  * dialog buttons) into {@link DialogRouter}.
  *
  * <p>{@code handleCustomClickAction} is defined only on the common listener, so
@@ -37,7 +37,7 @@ public abstract class CustomClickActionMixin {
 					value = "INVOKE",
 					target = "Lnet/minecraft/server/MinecraftServer;handleCustomClickAction(Lnet/minecraft/resources/Identifier;Ljava/util/Optional;)V"),
 			cancellable = true)
-	private void savepoint_radio$onCustomClickAction(ServerboundCustomClickActionPacket packet, CallbackInfo ci) {
+	private void travelers_jukebox$onCustomClickAction(ServerboundCustomClickActionPacket packet, CallbackInfo ci) {
 		if (!SavePointRadioMod.MOD_ID.equals(packet.id().getNamespace())) {
 			// Not ours: let vanilla run (it only debug-logs).
 			return;
@@ -52,7 +52,7 @@ public abstract class CustomClickActionMixin {
 				}
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] dialog custom-click handler failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] dialog custom-click handler failed", t);
 		}
 		// Always cancel for our namespace so vanilla's server call is skipped.
 		ci.cancel();

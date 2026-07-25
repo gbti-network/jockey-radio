@@ -25,7 +25,7 @@ import java.util.Set;
  * what places it.</p>
  *
  * <p><b>What it does.</b> On {@link RadioConfig#load()} it extracts the platform binary from
- * the jar to {@code <configDir>/savepoint_radio/bin/}, sets the execute bit (uploads and
+ * the jar to {@code <configDir>/travelers_jukebox/bin/}, sets the execute bit (uploads and
  * extractions both land mode 644 on these hosts), and points {@link RadioConfig#ffmpegBinary}
  * / {@link RadioConfig#ytdlpBinary} at the extracted files - but ONLY when the operator left
  * them at their default bare names. An explicit path in the config is always respected, and a
@@ -51,10 +51,10 @@ public final class BundledBinaries {
 	static final String BUNDLE_VERSION = "ffmpeg-btbn-N125748+ytdlp-2026.07.04+deno-2.9.4";
 
 	/** Jar resource paths (absolute, from the class loader root). */
-	private static final String FFMPEG_RESOURCE = "/savepoint_radio/bin/linux-amd64/ffmpeg";
-	private static final String YTDLP_RESOURCE = "/savepoint_radio/bin/linux-amd64/yt-dlp";
+	private static final String FFMPEG_RESOURCE = "/travelers_jukebox/bin/linux-amd64/ffmpeg";
+	private static final String YTDLP_RESOURCE = "/travelers_jukebox/bin/linux-amd64/yt-dlp";
 	/** JavaScript runtime yt-dlp uses to solve some platforms' signature challenge (optional). */
-	private static final String DENO_RESOURCE = "/savepoint_radio/bin/linux-amd64/deno";
+	private static final String DENO_RESOURCE = "/travelers_jukebox/bin/linux-amd64/deno";
 
 	/** The compiled defaults in {@link RadioConfig}; an unchanged value means "not overridden". */
 	static final String FFMPEG_DEFAULT = "ffmpeg";
@@ -63,7 +63,7 @@ public final class BundledBinaries {
 	/**
 	 * Extracts the bundled binaries if needed and repoints {@code config} at them. Idempotent
 	 * and never throws. Called from {@link RadioConfig#load()} so every load (including
-	 * {@code /savepoint reload}) resolves consistently.
+	 * {@code /jukebox reload}) resolves consistently.
 	 */
 	public static void installAndResolve(RadioConfig config, Path configDir) {
 		try {
@@ -76,7 +76,7 @@ public final class BundledBinaries {
 			if (SavePointRadioMod.class.getResource(FFMPEG_RESOURCE) == null) {
 				return; // a thin jar (built without .product/ binaries) - nothing to extract
 			}
-			Path binDir = configDir.resolve("savepoint_radio").resolve("bin");
+			Path binDir = configDir.resolve("travelers_jukebox").resolve("bin");
 			Path ffmpeg = binDir.resolve("ffmpeg");
 			Path ytdlp = binDir.resolve("yt-dlp");
 			Path marker = binDir.resolve(".bundle-version");
@@ -95,7 +95,7 @@ public final class BundledBinaries {
 				// leaves it stale and the next boot re-extracts rather than trusting a partial set.
 				Files.writeString(marker, BUNDLE_VERSION);
 				SavePointRadioMod.LOGGER.info(
-						"[radio] installed bundled ffmpeg + yt-dlp{} to {} ({})",
+						"[jukebox] installed bundled ffmpeg + yt-dlp{} to {} ({})",
 						deno ? " + deno" : "", binDir, BUNDLE_VERSION);
 			}
 
@@ -109,7 +109,7 @@ public final class BundledBinaries {
 		} catch (Throwable t) {
 			// Never fatal: fall back to the configured value; the startup doctor reports the verdict.
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] could not install bundled binaries - using the configured ffmpeg/yt-dlp path: {}",
+					"[jukebox] could not install bundled binaries - using the configured ffmpeg/yt-dlp path: {}",
 					t.toString());
 		}
 	}

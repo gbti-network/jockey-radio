@@ -17,14 +17,14 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Gson-backed configuration stored at {@code <configDir>/savepoint_radio.json}.
+ * Gson-backed configuration stored at {@code <configDir>/travelers_jukebox.json}.
  *
  * <pre>{@code
  * {
  *   "stations": {
  *     "pulsefm": {
  *       "displayName": "PulseFM",
- *       "url": "https://savepoint.fm/radio/broadcast/35/trunk.m3u8",
+ *       "url": "https://jukebox.fm/radio/broadcast/35/trunk.m3u8",
  *       "token": null,
  *       "radiusBlocks": 32
  *     }
@@ -57,7 +57,7 @@ import java.util.regex.Pattern;
  */
 public final class RadioConfig {
 
-	private static final String FILE_NAME = "savepoint_radio.json";
+	private static final String FILE_NAME = "travelers_jukebox.json";
 
 	/** Frames per second at 48 kHz mono in 960-sample (20 ms) frames. */
 	private static final int FRAMES_PER_SECOND = 50;
@@ -169,7 +169,7 @@ public final class RadioConfig {
 
 	/**
 	 * Station keys must stay parseable by Brigadier's
-	 * {@code StringArgumentType.word()} ({@code /radiodisc give <station>}),
+	 * {@code StringArgumentType.word()} ({@code /jukeboxdisc give <station>}),
 	 * which only accepts these characters.
 	 */
 	private static final Pattern VALID_KEY = Pattern.compile("[A-Za-z0-9_.+-]+");
@@ -182,7 +182,7 @@ public final class RadioConfig {
 	private static RadioConfig instance;
 
 	public Map<String, Station> stations = new LinkedHashMap<>();
-	public String defaultStation = "pulsefm";
+	public String defaultStation = null;
 
 	/** Feed implementation: {@code "ffmpeg"} (default) or {@code "stub"}. */
 	public String ingest = "ffmpeg";
@@ -191,7 +191,7 @@ public final class RadioConfig {
 	/**
 	 * Whether to install the ffmpeg/yt-dlp binaries bundled in the jar on first run and use
 	 * them automatically (<b>default {@code true}</b>). See {@link BundledBinaries}: on
-	 * linux/amd64 the binaries are extracted to {@code <configDir>/savepoint_radio/bin/},
+	 * linux/amd64 the binaries are extracted to {@code <configDir>/travelers_jukebox/bin/},
 	 * chmod +x, and used ONLY while {@link #ffmpegBinary}/{@link #ytdlpBinary} are their default
 	 * bare names - an explicit path always wins. Set this {@code false} to force the configured
 	 * value / PATH even on a bundled build (e.g. to use a system ffmpeg you trust).
@@ -401,7 +401,7 @@ public final class RadioConfig {
 	/**
 	 * Public host (bare {@code host} or {@code host:port} authority, no scheme,
 	 * no path) an external DJ/OBS uses to reach an RTMP-receive disc that binds
-	 * {@code 0.0.0.0}. Optional and {@code null} by default: the {@code /savepoint}
+	 * {@code 0.0.0.0}. Optional and {@code null} by default: the {@code /jukebox}
 	 * disc detail page always shows the local {@code rtmp://127.0.0.1:<port>/live}
 	 * ingest, and additionally an external {@code rtmp://<rtmpPublicHost>/live}
 	 * form only when this is set and the disc binds all interfaces. A value with
@@ -410,7 +410,7 @@ public final class RadioConfig {
 	 */
 	public String rtmpPublicHost = null;
 	/**
-	 * Op permission level the {@code /savepoint} admin tree requires (0..4;
+	 * Op permission level the {@code /jukebox} admin tree requires (0..4;
 	 * default 3 = {@code Commands.LEVEL_ADMINS}). Clamped into range on load.
 	 */
 	public int adminPermissionLevel = 3;
@@ -427,7 +427,7 @@ public final class RadioConfig {
 	 */
 	public int nowPlayingPollSeconds = 15;
 	/**
-	 * How long (seconds) the {@code /savepoint} "Test" audible monitor plays a
+	 * How long (seconds) the {@code /jukebox} "Test" audible monitor plays a
 	 * disc's feed to the admin before it auto-stops. Default 90; clamped 10..600
 	 * on load. Bounds the transient feed lease and boss bar a monitor holds so a
 	 * forgotten monitor never streams indefinitely.
@@ -495,7 +495,7 @@ public final class RadioConfig {
 	public boolean rtmpKeepAlive = true;
 	/**
 	 * sow-009: TCP port for the internal loopback audio server that serves files from
-	 * {@code config/savepoint_radio/audio/} to {@code FILE} discs over HTTP (so ffmpeg
+	 * {@code config/travelers_jukebox/audio/} to {@code FILE} discs over HTTP (so ffmpeg
 	 * never needs {@code file:}). Bound to {@code 127.0.0.1} only. Default 24462;
 	 * {@code 0} disables the server (direct-HTTP-link FILE discs still work). If the port
 	 * is busy the server logs and disables itself. Pre-key files load with the default.
@@ -693,7 +693,7 @@ public final class RadioConfig {
 				Station station = entry.getValue();
 				if (key == null || !VALID_KEY.matcher(key).matches()) {
 					SavePointRadioMod.LOGGER.warn(
-							"Ignoring station '{}' in {}: keys must match [A-Za-z0-9_.+-]+ to be usable in /radiodisc",
+							"Ignoring station '{}' in {}: keys must match [A-Za-z0-9_.+-]+ to be usable in /jukeboxdisc",
 							key, FILE_NAME);
 					return true;
 				}
@@ -1037,12 +1037,10 @@ public final class RadioConfig {
 
 	private static RadioConfig createDefault() {
 		RadioConfig config = new RadioConfig();
-		config.stations.put("pulsefm", new Station(
-				"PulseFM",
-				"https://savepoint.fm/radio/broadcast/35/trunk.m3u8",
-				null,
-				32));
-		config.defaultStation = "pulsefm";
+		// Traveler's Jukebox is standalone: a fresh config ships with NO stations, so nothing
+		// implies an external broadcasting service is required. Operators add their own config
+		// stations (SavePoint or any m3u8) or, more commonly, create discs via /jukebox. See
+		// docs for an example SavePoint station block.
 		// Write the jitter-buffer keys explicitly so a freshly generated file shows
 		// them (and so a reload sees them as present, not migrated defaults).
 		config.targetBufferSeconds = DEFAULT_TARGET_BUFFER_SECONDS;

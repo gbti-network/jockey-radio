@@ -118,7 +118,7 @@ public final class RadioSession {
 	/**
 	 * The last now-playing poll outcome for this session (status text only, never an
 	 * error the radio depends on). {@code OFF} until the poller reports. Volatile so
-	 * an off-thread reader ({@code /radiodisc diag}) sees a fresh value.
+	 * an off-thread reader ({@code /jukeboxdisc diag}) sees a fresh value.
 	 */
 	private volatile NowPlayingStatus nowPlayingStatus = NowPlayingStatus.OFF;
 
@@ -359,7 +359,7 @@ public final class RadioSession {
 			}
 			reason = "api-not-ready";
 		}
-		SavePointRadioMod.LOGGER.info("[radio] sink fallback type=null reason={} {} station={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] sink fallback type=null reason={} {} station={}",
 				reason, describePos(), label);
 		return new NullSink("station=" + label + " " + describePos());
 	}

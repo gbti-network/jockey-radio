@@ -26,7 +26,7 @@ public final class NullSink implements AudioSink {
 	@Override
 	public void open() {
 		open = true;
-		SavePointRadioMod.LOGGER.info("[radio] sink open {}", description);
+		SavePointRadioMod.LOGGER.info("[jukebox] sink open {}", description);
 	}
 
 	@Override
@@ -38,7 +38,7 @@ public final class NullSink implements AudioSink {
 	@Override
 	public void close() {
 		open = false;
-		SavePointRadioMod.LOGGER.info("[radio] sink close {} framesAccepted={}", description, framesAccepted.get());
+		SavePointRadioMod.LOGGER.info("[jukebox] sink close {} framesAccepted={}", description, framesAccepted.get());
 	}
 
 	public boolean isOpen() {

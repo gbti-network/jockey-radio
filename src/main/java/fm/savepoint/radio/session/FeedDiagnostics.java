@@ -110,7 +110,7 @@ public final class FeedDiagnostics {
 			}
 			// TRUNCATE on init: one clean file per server run.
 			BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8);
-			writer.write("# SavePoint Radio feed diagnostics - run start "
+			writer.write("# Traveler's Jukebox feed diagnostics - run start "
 					+ TIME_FORMAT.format(Instant.now()) + " - interval " + sec + "s");
 			writer.newLine();
 			writer.write(CSV_HEADER);
@@ -124,10 +124,10 @@ public final class FeedDiagnostics {
 			});
 			instance = new FeedDiagnostics(file, intervalNanos, writer, io);
 			SavePointRadioMod.LOGGER.info(
-					"[radio] feed diagnostics ON -> {} (interval {}s)", file, sec);
+					"[jukebox] feed diagnostics ON -> {} (interval {}s)", file, sec);
 		} catch (Throwable t) {
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] feed diagnostics failed to initialize; staying disabled", t);
+					"[jukebox] feed diagnostics failed to initialize; staying disabled", t);
 			instance = null;
 		}
 	}
@@ -171,6 +171,6 @@ public final class FeedDiagnostics {
 		} catch (IOException ignored) {
 			// best-effort close
 		}
-		SavePointRadioMod.LOGGER.info("[radio] feed diagnostics closed ({})", inst.file);
+		SavePointRadioMod.LOGGER.info("[jukebox] feed diagnostics closed ({})", inst.file);
 	}
 }

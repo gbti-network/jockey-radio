@@ -27,12 +27,12 @@ public final class StubStationFeed implements StationFeed {
 
 	@Override
 	public void start() {
-		SavePointRadioMod.LOGGER.info("[radio] feed start station={} (stub, no audio yet)", stationKey);
+		SavePointRadioMod.LOGGER.info("[jukebox] feed start station={} (stub, no audio yet)", stationKey);
 	}
 
 	@Override
 	public void stop() {
-		SavePointRadioMod.LOGGER.info("[radio] feed stop station={} (stub)", stationKey);
+		SavePointRadioMod.LOGGER.info("[jukebox] feed stop station={} (stub)", stationKey);
 		sinks.clear();
 	}
 

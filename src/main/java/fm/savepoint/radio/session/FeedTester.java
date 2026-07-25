@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * Fire-and-forget reachability probe behind the {@code /savepoint} "Test feed"
+ * Fire-and-forget reachability probe behind the {@code /jukebox} "Test feed"
  * button. Runs entirely on mod-owned daemon threads - never the server thread -
  * and hands the caller a {@link Result} to deliver from a
  * {@code server.execute(...)} continuation.
@@ -50,7 +50,7 @@ public final class FeedTester {
 	 * Cap on concurrent probes. The pool has core 0 with a keep-alive (no thread
 	 * lives while idle) and a {@link SynchronousQueue} + abort policy, so work
 	 * past the cap is rejected rather than piling up an unbounded backlog - a fast
-	 * clicker (or a forged {@code savepoint_radio:test} packet loop) can never
+	 * clicker (or a forged {@code travelers_jukebox:test} packet loop) can never
 	 * spin up more than this many probe threads.
 	 */
 	private static final int MAX_CONCURRENT_PROBES = 2;
@@ -66,7 +66,7 @@ public final class FeedTester {
 
 		@Override
 		public Thread newThread(Runnable runnable) {
-			Thread thread = new Thread(runnable, "savepoint-radio-test-" + index.getAndIncrement());
+			Thread thread = new Thread(runnable, "travelers-jukebox-test-" + index.getAndIncrement());
 			thread.setDaemon(true);
 			return thread;
 		}
@@ -117,7 +117,7 @@ public final class FeedTester {
 			} catch (Throwable t) {
 				// A probe must never crash the pool thread or leak internals into
 				// the dialog; report a generic failure and log the detail server-side.
-				SavePointRadioMod.LOGGER.warn("[radio] feed test failed disc={}", def.discId, t);
+				SavePointRadioMod.LOGGER.warn("[jukebox] feed test failed disc={}", def.discId, t);
 				result = new Result("Test failed", "The probe hit an unexpected error - see the server log.");
 			}
 			onResult.accept(result);

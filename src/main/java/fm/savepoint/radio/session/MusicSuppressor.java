@@ -78,7 +78,7 @@ public final class MusicSuppressor {
 		try {
 			sweep(server);
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] music suppressor sweep failed", t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] music suppressor sweep failed", t);
 		}
 	}
 

@@ -54,7 +54,7 @@ public abstract class JukeboxSongPlayerMixin {
 	private Holder<JukeboxSong> song;
 
 	@Inject(method = "tick", at = @At("HEAD"))
-	private void savepoint_radio$beforeTick(LevelAccessor level, BlockState state, CallbackInfo ci) {
+	private void travelers_jukebox$beforeTick(LevelAccessor level, BlockState state, CallbackInfo ci) {
 		try {
 			Holder<JukeboxSong> current = this.song;
 			if (current == null || !current.is(RadioDiscFactory.RADIO_SONG_KEY)) {
@@ -80,18 +80,18 @@ public abstract class JukeboxSongPlayerMixin {
 				this.ticksSinceSongStarted = 0L;
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] JukeboxSongPlayer.tick hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] JukeboxSongPlayer.tick hook failed", t);
 		}
 	}
 
 	@Inject(method = "stop", at = @At("TAIL"))
-	private void savepoint_radio$afterStop(LevelAccessor level, BlockState state, CallbackInfo ci) {
+	private void travelers_jukebox$afterStop(LevelAccessor level, BlockState state, CallbackInfo ci) {
 		try {
 			if (level instanceof ServerLevel serverLevel) {
 				RadioManager.get().onVanillaSongStopped(serverLevel, blockPos);
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] JukeboxSongPlayer.stop hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] JukeboxSongPlayer.stop hook failed", t);
 		}
 	}
 }

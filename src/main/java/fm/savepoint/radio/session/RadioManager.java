@@ -166,7 +166,7 @@ public final class RadioManager {
 			if (session.state() == RadioSession.State.ACTIVE && !session.isFinished()
 					&& "ended".equals(FeedRegistry.get().feedPlayoutState(session.identity()))) {
 				session.markFinished();
-				SavePointRadioMod.LOGGER.info("[radio] disc played to end (repeat off) {} station={}",
+				SavePointRadioMod.LOGGER.info("[jukebox] disc played to end (repeat off) {} station={}",
 						session.describePos(), session.stationKey());
 			}
 		}
@@ -317,7 +317,7 @@ public final class RadioManager {
 	private void upgradePlaceholderSinks(String reason) {
 		for (RadioSession session : sessions.values()) {
 			if (session.isOnPlaceholderSink()) {
-				SavePointRadioMod.LOGGER.info("[radio] sink reopen {} station={} reason={}",
+				SavePointRadioMod.LOGGER.info("[jukebox] sink reopen {} station={} reason={}",
 						session.describePos(), session.stationKey(), reason);
 				session.reopenSink(server);
 			}
@@ -337,7 +337,7 @@ public final class RadioManager {
 		sessions.clear();
 		NowPlayingPoller.get().stop();
 		FeedRegistry.get().shutdown(EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-		SavePointRadioMod.LOGGER.info("[radio] manager shut down");
+		SavePointRadioMod.LOGGER.info("[jukebox] manager shut down");
 	}
 
 	// ------------------------------------------------------------------
@@ -465,8 +465,8 @@ public final class RadioManager {
 				case PLATFORM -> {
 					if (!config.enablePlatformLinks) {
 						SavePointRadioMod.LOGGER.warn(
-								"[radio] platform disc '{}' not started: platform links are disabled. "
-										+ "Set enablePlatformLinks=true in savepoint_radio.json to enable them - "
+								"[jukebox] platform disc '{}' not started: platform links are disabled. "
+										+ "Set enablePlatformLinks=true in travelers_jukebox.json to enable them - "
 										+ "doing so is an explicit acceptance that you have the rights to "
 										+ "rebroadcast the linked content on your server.", discId);
 						yield new StubStationFeed(discId);
@@ -498,7 +498,7 @@ public final class RadioManager {
 			RadioConfig.Station station = config.stations.get(stationKey);
 			if (station == null || station.url == null || station.url.isBlank()) {
 				SavePointRadioMod.LOGGER.warn(
-						"[radio] no configured url for station={} - using stub feed", stationKey);
+						"[jukebox] no configured url for station={} - using stub feed", stationKey);
 				return null;
 			}
 			return new HlsPullFeed(stationKey, StationEndpoints.forUrl(station.url, station.token),
@@ -565,7 +565,7 @@ public final class RadioManager {
 		}
 		RadioSession session = sessions.get(GlobalPos.of(level.dimension(), pos));
 		if (session != null && session.state() == RadioSession.State.ACTIVE) {
-			SavePointRadioMod.LOGGER.info("[radio] song-elapsed keepalive {} station={}",
+			SavePointRadioMod.LOGGER.info("[jukebox] song-elapsed keepalive {} station={}",
 					session.describePos(), session.stationKey());
 		}
 	}
@@ -667,7 +667,7 @@ public final class RadioManager {
 			}
 			JukeboxSong.fromStack(item).ifPresent(song -> songPlayer.setSongWithoutPlaying(song, 0L));
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] radio animation resume failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] radio animation resume failed", t);
 		}
 	}
 
@@ -703,29 +703,29 @@ public final class RadioManager {
 		if (resolution.source() == null) {
 			// Unknown/deleted disc id: the session is tracked (so eject/replace
 			// stay clean) but holds no feed and plays nothing.
-			SavePointRadioMod.LOGGER.info("[radio] unknown disc id={} (inert)", resolution.label());
+			SavePointRadioMod.LOGGER.info("[jukebox] unknown disc id={} (inert)", resolution.label());
 		} else {
-			SavePointRadioMod.LOGGER.info("[radio] session start {} station={}",
+			SavePointRadioMod.LOGGER.info("[jukebox] session start {} station={}",
 					session.describePos(), resolution.label());
 		}
 	}
 
 	private void resume(RadioSession session) {
 		session.activate(server);
-		SavePointRadioMod.LOGGER.info("[radio] session resume {} station={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] session resume {} station={}",
 				session.describePos(), session.stationKey());
 	}
 
 	private void suspend(RadioSession session, String reason) {
 		session.suspend();
-		SavePointRadioMod.LOGGER.info("[radio] session suspend {} station={} reason={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] session suspend {} station={} reason={}",
 				session.describePos(), session.stationKey(), reason);
 	}
 
 	private void stop(RadioSession session, String reason) {
 		sessions.remove(session.pos(), session);
 		session.stop();
-		SavePointRadioMod.LOGGER.info("[radio] session stop {} station={} reason={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] session stop {} station={} reason={}",
 				session.describePos(), session.stationKey(), reason);
 	}
 
@@ -741,7 +741,7 @@ public final class RadioManager {
 
 	private void checkServerThread(String what) {
 		if (server != null && !server.isSameThread()) {
-			SavePointRadioMod.LOGGER.error("[radio] {} called off the server thread ({}) - this is a bug",
+			SavePointRadioMod.LOGGER.error("[jukebox] {} called off the server thread ({}) - this is a bug",
 					what, Thread.currentThread().getName(), new IllegalStateException());
 		}
 	}

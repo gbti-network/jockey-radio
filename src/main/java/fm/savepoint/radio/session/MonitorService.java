@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Server-side coordinator for the on-demand AUDIBLE MONITOR behind the
- * {@code /savepoint} "Test" button: it lets an admin hear a disc's feed
+ * {@code /jukebox} "Test" button: it lets an admin hear a disc's feed
  * privately - no jukebox - with a boss-bar level meter, then auto-stops.
  *
  * <p>One monitor per admin. {@link #start(ServerPlayer, String)} acquires the
@@ -115,7 +115,7 @@ public final class MonitorService {
 			Monitor monitor = new Monitor(admin.getUUID(), discId, discName, source.key(),
 					feed, sink, bossBar, Math.max(1, seconds) * TICKS_PER_SECOND);
 			monitors.put(admin.getUUID(), monitor);
-			SavePointRadioMod.LOGGER.info("[radio] monitor start admin={} station={} seconds={}",
+			SavePointRadioMod.LOGGER.info("[jukebox] monitor start admin={} station={} seconds={}",
 					admin.getName().getString(), discId, seconds);
 			return StartResult.STARTED;
 		} catch (Throwable t) {
@@ -140,7 +140,7 @@ public final class MonitorService {
 				} catch (Throwable ignored) {
 				}
 			}
-			SavePointRadioMod.LOGGER.error("[radio] monitor start failed admin={} station={}",
+			SavePointRadioMod.LOGGER.error("[jukebox] monitor start failed admin={} station={}",
 					admin.getName().getString(), discId, t);
 			return StartResult.ERROR;
 		}
@@ -214,7 +214,7 @@ public final class MonitorService {
 			try {
 				refresh(monitor);
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] monitor refresh failed station={}", monitor.discId, t);
+				SavePointRadioMod.LOGGER.warn("[jukebox] monitor refresh failed station={}", monitor.discId, t);
 			}
 		}
 		if (gone != null) {
@@ -278,25 +278,25 @@ public final class MonitorService {
 		try {
 			monitor.feed.removeSink(monitor.sink);
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] monitor removeSink failed station={}", monitor.discId, t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] monitor removeSink failed station={}", monitor.discId, t);
 		}
 		try {
 			FeedRegistry.get().release(monitor.feedKey);
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] monitor feed release failed station={}", monitor.discId, t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] monitor feed release failed station={}", monitor.discId, t);
 		}
 		try {
 			monitor.sink.close();
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] monitor sink close failed station={}", monitor.discId, t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] monitor sink close failed station={}", monitor.discId, t);
 		}
 		try {
 			monitor.bossBar.removeAllPlayers();
 			monitor.bossBar.setVisible(false);
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] monitor boss bar teardown failed station={}", monitor.discId, t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] monitor boss bar teardown failed station={}", monitor.discId, t);
 		}
-		SavePointRadioMod.LOGGER.info("[radio] monitor stop station={} reason={}", monitor.discId, reason);
+		SavePointRadioMod.LOGGER.info("[jukebox] monitor stop station={} reason={}", monitor.discId, reason);
 	}
 
 	/**

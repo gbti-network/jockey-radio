@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * One-shot report of what this host actually LETS US DO — written to the server log at startup.
  *
- * <p><b>Why.</b> SavePoint Radio drives external binaries (ffmpeg always; yt-dlp for PLATFORM). On a
+ * <p><b>Why.</b> Traveler's Jukebox drives external binaries (ffmpeg always; yt-dlp for PLATFORM). On a
  * managed Minecraft host (Modrinth Servers, Aternos, BisectHosting, …) the operator has a file
  * manager but no shell, so the plan is to SHIP the binaries and extract them at runtime. That plan
  * rests on one assumption that cannot be reasoned about from here — <em>can this container execute a
@@ -74,42 +74,42 @@ public final class HostCapabilityProbe {
 			Tool ffmpeg = whichVersion(RadioConfig.get().ffmpegBinary, "-version");
 			Tool ytdlp = whichVersion(RadioConfig.get().ytdlpBinary, "--version");
 
-			SavePointRadioMod.LOGGER.info("[radio] ---- host capability probe ----");
-			SavePointRadioMod.LOGGER.info("[radio] host os={} arch={} java={}", os, arch, java);
-			SavePointRadioMod.LOGGER.info("[radio] host spawn-process={} extracted-binary-executable={} ({})",
+			SavePointRadioMod.LOGGER.info("[jukebox] ---- host capability probe ----");
+			SavePointRadioMod.LOGGER.info("[jukebox] host os={} arch={} java={}", os, arch, java);
+			SavePointRadioMod.LOGGER.info("[jukebox] host spawn-process={} extracted-binary-executable={} ({})",
 					canSpawn, canExec, execDetail);
-			SavePointRadioMod.LOGGER.info("[radio] host ffmpeg={}", ffmpeg.detail());
-			SavePointRadioMod.LOGGER.info("[radio] host yt-dlp={}", ytdlp.detail());
+			SavePointRadioMod.LOGGER.info("[jukebox] host ffmpeg={}", ffmpeg.detail());
+			SavePointRadioMod.LOGGER.info("[jukebox] host yt-dlp={}", ytdlp.detail());
 
 			// Branch on the SUCCESS marker, never on "is it the missing string". The old chain
 			// tested ffmpeg.startsWith("missing"), so "exit=126 ...", "timed out", "unavailable"
 			// and "not configured" all fell through to "fully supported" while the startup
 			// doctor logged the opposite and the mod quietly ran on stub feeds.
 			if (canSpawn != Verdict.YES) {
-				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: this host BLOCKS process spawning - "
+				SavePointRadioMod.LOGGER.warn("[jukebox] host VERDICT: this host BLOCKS process spawning - "
 						+ "no audio source can work here, bundled binaries would not help.");
 			} else if (canExec == Verdict.NO) {
-				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: processes spawn, but a binary written "
+				SavePointRadioMod.LOGGER.warn("[jukebox] host VERDICT: processes spawn, but a binary written "
 						+ "into the server directory CANNOT be executed (noexec or equivalent). Shipping "
 						+ "bundled binaries will NOT work on this host; ffmpeg must already be on PATH.");
 			} else if (canExec == Verdict.UNKNOWN) {
-				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: INCONCLUSIVE - the exec probe did not "
+				SavePointRadioMod.LOGGER.warn("[jukebox] host VERDICT: INCONCLUSIVE - the exec probe did not "
 						+ "finish ({}), so whether a bundled binary can run here is unknown.", execDetail);
 			} else if (ffmpeg.ok()) {
-				SavePointRadioMod.LOGGER.info("[radio] host VERDICT: extracted binaries are executable and "
+				SavePointRadioMod.LOGGER.info("[jukebox] host VERDICT: extracted binaries are executable and "
 						+ "ffmpeg is present - this host is fully supported.");
 			} else if (ffmpeg.missing()) {
-				SavePointRadioMod.LOGGER.info("[radio] host VERDICT: extracted binaries ARE executable here - "
+				SavePointRadioMod.LOGGER.info("[jukebox] host VERDICT: extracted binaries ARE executable here - "
 						+ "bundling ffmpeg/yt-dlp is viable. ffmpeg is not installed, which bundling would fix.");
 			} else {
-				SavePointRadioMod.LOGGER.warn("[radio] host VERDICT: extracted binaries are executable, but "
+				SavePointRadioMod.LOGGER.warn("[jukebox] host VERDICT: extracted binaries are executable, but "
 						+ "ffmpeg did not answer -version ({}) - feeds will fall back to stubs until this is "
 						+ "resolved.", ffmpeg.detail());
 			}
-			SavePointRadioMod.LOGGER.info("[radio] --------------------------------");
+			SavePointRadioMod.LOGGER.info("[jukebox] --------------------------------");
 		} catch (Throwable t) {
 			// A diagnostic must never take the server down.
-			SavePointRadioMod.LOGGER.warn("[radio] host capability probe failed: {}", t.toString());
+			SavePointRadioMod.LOGGER.warn("[jukebox] host capability probe failed: {}", t.toString());
 		}
 	}
 
@@ -120,7 +120,7 @@ public final class HostCapabilityProbe {
 	 */
 	private static Verdict canSpawnProcess() {
 		try {
-			Process p = new ProcessBuilder("savepoint-radio-probe-nonexistent-binary")
+			Process p = new ProcessBuilder("travelers-jukebox-probe-nonexistent-binary")
 					.redirectErrorStream(true)
 					.start();
 			p.destroyForcibly();
@@ -296,15 +296,15 @@ public final class HostCapabilityProbe {
 			boolean ok = f.setExecutable(true, true) || f.setExecutable(true, false);
 			if (ok && Files.isExecutable(path)) {
 				SavePointRadioMod.LOGGER.info(
-						"[radio] set the execute bit on '{}' (uploaded binaries arrive non-executable "
+						"[jukebox] set the execute bit on '{}' (uploaded binaries arrive non-executable "
 								+ "on managed hosts)", binary);
 			} else {
 				SavePointRadioMod.LOGGER.warn(
-						"[radio] '{}' exists but is not executable and the execute bit could not be set", binary);
+						"[jukebox] '{}' exists but is not executable and the execute bit could not be set", binary);
 			}
 		} catch (Throwable t) {
 			// Never fatal - the -version probe decides the outcome.
-			SavePointRadioMod.LOGGER.debug("[radio] ensureExecutable('{}') skipped: {}", binary, t.toString());
+			SavePointRadioMod.LOGGER.debug("[jukebox] ensureExecutable('{}') skipped: {}", binary, t.toString());
 		}
 	}
 

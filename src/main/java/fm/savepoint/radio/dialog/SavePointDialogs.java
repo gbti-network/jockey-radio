@@ -48,7 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Pure factory of vanilla {@link Dialog} objects for the {@code /savepoint}
+ * Pure factory of vanilla {@link Dialog} objects for the {@code /jukebox}
  * admin UI (the sow-002 W4 redesign). No side effects, no registry writes -
  * every builder reads the live {@link DiscRegistry} snapshot and returns an
  * inline dialog for {@link DialogScreens#send}. Routing of the click actions
@@ -62,7 +62,7 @@ import java.util.Set;
  * button - never from a per-disc page.</p>
  *
  * <p>Every button carries a {@link CustomAll} nav/action whose {@code id}
- * namespace is {@code savepoint_radio}; the {@link DialogRouter} dispatches on
+ * namespace is {@code travelers_jukebox}; the {@link DialogRouter} dispatches on
  * the id path. The connection-info copy buttons are the one exception: they
  * carry a {@link StaticAction} wrapping a {@link ClickEvent.CopyToClipboard}
  * (handled client-side, no server round trip) - the real ingest URL / stream
@@ -174,70 +174,70 @@ public final class SavePointDialogs {
 	public static Dialog rootMenu(HolderLookup.Provider registries) {
 		List<DialogBody> body = new ArrayList<>();
 		discIconBody(registries, brandDef(), 24).ifPresent(body::add);
-		body.add(body(Lang.tr("savepoint_radio.menu.body",
+		body.add(body(Lang.tr("travelers_jukebox.menu.body",
 				"Admin console - create and manage streaming radio discs.")));
 
 		List<ActionButton> actions = List.of(
-				navButton(Lang.tr("savepoint_radio.menu.new", "+ New disc"),
-						Lang.tr("savepoint_radio.menu.new_tip", "Stream from a URL, or receive a broadcast"),
+				navButton(Lang.tr("travelers_jukebox.menu.new", "+ New disc"),
+						Lang.tr("travelers_jukebox.menu.new_tip", "Stream from a URL, or receive a broadcast"),
 						"new_disc", 220),
-				navButton(Lang.tr("savepoint_radio.menu.manage", "Manage discs"),
-						Lang.tr("savepoint_radio.menu.manage_tip", "Browse, edit, connect, give"),
+				navButton(Lang.tr("travelers_jukebox.menu.manage", "Manage discs"),
+						Lang.tr("travelers_jukebox.menu.manage_tip", "Browse, edit, connect, give"),
 						"manage", 220),
-				navButton(Lang.tr("savepoint_radio.menu.give", "Give disc"),
-						Lang.tr("savepoint_radio.menu.give_tip", "Hand a disc to a player"),
+				navButton(Lang.tr("travelers_jukebox.menu.give", "Give disc"),
+						Lang.tr("travelers_jukebox.menu.give_tip", "Hand a disc to a player"),
 						"give", 220),
-				navButton(Lang.tr("savepoint_radio.menu.reload", "Reload registry"),
-						Lang.tr("savepoint_radio.menu.reload_tip", "Re-read discs.json from disk"),
+				navButton(Lang.tr("travelers_jukebox.menu.reload", "Reload registry"),
+						Lang.tr("travelers_jukebox.menu.reload_tip", "Re-read discs.json from disk"),
 						"reload", 220),
-				navButton(Lang.tr("savepoint_radio.menu.close", "Close"),
-						Lang.tr("savepoint_radio.menu.close_tip", "Or press Esc"),
+				navButton(Lang.tr("travelers_jukebox.menu.close", "Close"),
+						Lang.tr("travelers_jukebox.menu.close_tip", "Or press Esc"),
 						"close", 220));
 		CommonDialogData common = commonNone(brandTitle(
-				Lang.tr("savepoint_radio.menu.title", "SavePoint Radio")), body, List.of());
+				Lang.tr("travelers_jukebox.menu.title", "Traveler's Jukebox")), body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
 	/** The "where does this disc's audio come from?" source chooser (drops "Pull"). */
 	public static Dialog sourceChooser() {
-		Component hls = Component.literal("").append(Lang.tr("savepoint_radio.source.hls", "Stream from a URL"))
+		Component hls = Component.literal("").append(Lang.tr("travelers_jukebox.source.hls", "Stream from a URL"))
 				.append(Component.literal(" "))
 				.append(Component.literal("[HLS]").withStyle(s -> s.withColor(TextColor.fromRgb(HLS_COLOR))));
-		Component rtmp = Component.literal("").append(Lang.tr("savepoint_radio.source.rtmp", "Receive a broadcast"))
+		Component rtmp = Component.literal("").append(Lang.tr("travelers_jukebox.source.rtmp", "Receive a broadcast"))
 				.append(Component.literal(" "))
 				.append(Component.literal("[RTMP]").withStyle(s -> s.withColor(TextColor.fromRgb(RTMP_COLOR))));
-		Component file = Component.literal("").append(Lang.tr("savepoint_radio.source.file", "Play an audio file"))
+		Component file = Component.literal("").append(Lang.tr("travelers_jukebox.source.file", "Play an audio file"))
 				.append(Component.literal(" "))
 				.append(Component.literal("[FILE]").withStyle(s -> s.withColor(TextColor.fromRgb(FILE_COLOR))));
-		Component platform = Component.literal("").append(Lang.tr("savepoint_radio.source.platform", "Play a platform link"))
+		Component platform = Component.literal("").append(Lang.tr("travelers_jukebox.source.platform", "Play a platform link"))
 				.append(Component.literal(" "))
 				.append(Component.literal("[LINK]").withStyle(s -> s.withColor(TextColor.fromRgb(PLATFORM_COLOR))));
 
 		List<ActionButton> actions = new ArrayList<>();
-		actions.add(navButton(hls, Lang.tr("savepoint_radio.source.hls_tip",
+		actions.add(navButton(hls, Lang.tr("travelers_jukebox.source.hls_tip",
 				"The server plays a SavePoint station / any HLS stream"), "create_pull", 260));
-		actions.add(navButton(rtmp, Lang.tr("savepoint_radio.source.rtmp_tip",
+		actions.add(navButton(rtmp, Lang.tr("travelers_jukebox.source.rtmp_tip",
 				"A DJ / OBS / relay pushes audio into the server"), "create_rtmp", 260));
-		actions.add(navButton(file, Lang.tr("savepoint_radio.source.file_tip",
+		actions.add(navButton(file, Lang.tr("travelers_jukebox.source.file_tip",
 				"Loop a local audio file (a direct http link, or one from the audio folder)"), "create_file", 260));
 		// sow-013: platform links are gated OFF by default. When disabled the source type is simply
 		// not offered - the operator opts in by editing the config, which is the point of the gate.
 		boolean platformEnabled = RadioConfig.get().enablePlatformLinks;
 		if (platformEnabled) {
-			actions.add(navButton(platform, Lang.tr("savepoint_radio.source.platform_tip",
+			actions.add(navButton(platform, Lang.tr("travelers_jukebox.source.platform_tip",
 					"Paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link (resolved via yt-dlp)"),
 					"create_platform", 260));
 		}
-		actions.add(navButton(Lang.tr("savepoint_radio.button.back", "Back"), "root", 150));
+		actions.add(navButton(Lang.tr("travelers_jukebox.button.back", "Back"), "root", 150));
 
 		List<DialogBody> body = new ArrayList<>();
-		body.add(body(Lang.tr("savepoint_radio.source.body", "Where does this disc's audio come from?")));
+		body.add(body(Lang.tr("travelers_jukebox.source.body", "Where does this disc's audio come from?")));
 		if (!platformEnabled) {
 			body.add(body(note("Platform links (SoundCloud / Mixcloud / Bandcamp / Twitch / …) are disabled. "
-					+ "Enable enablePlatformLinks in savepoint_radio.json only if you have the rights "
+					+ "Enable enablePlatformLinks in travelers_jukebox.json only if you have the rights "
 					+ "to rebroadcast that content on your server.")));
 		}
-		CommonDialogData common = commonNone(Lang.tr("savepoint_radio.source.title", "New disc"),
+		CommonDialogData common = commonNone(Lang.tr("travelers_jukebox.source.title", "New disc"),
 				body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
@@ -260,40 +260,40 @@ public final class SavePointDialogs {
 		discIconBody(registries, previewDef(values), 24, previewCaption(previewDef(values))).ifPresent(body::add);
 		body.add(edit
 				? body(Component.literal("Editing this HLS stream disc."))
-				: body(Lang.tr("savepoint_radio.form.pull.body_create",
+				: body(Lang.tr("travelers_jukebox.form.pull.body_create",
 						"New stream disc - the server plays any stream URL (a SavePoint station, an m3u8 playlist, an icecast/http stream, ...).")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
 			inputs.add(new Input("disc_id",
-					text(Lang.tr("savepoint_radio.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
+					text(Lang.tr("travelers_jukebox.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
 							pick(values, d -> d.discId, ""), 32)));
 		}
 		inputs.add(new Input("name",
-				text(Lang.tr("savepoint_radio.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
+				text(Lang.tr("travelers_jukebox.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		inputs.add(new Input("stream_url",
-				text(Lang.tr("savepoint_radio.input.stream_url", "Stream URL (m3u8 or any stream)"),
+				text(Lang.tr("travelers_jukebox.input.stream_url", "Stream URL (m3u8 or any stream)"),
 						pick(values, d -> d.streamUrl, ""), 512)));
 		// Blank on a fresh open (never pre-fills a stored token - the HLS token is
 		// masked everywhere); a Preview round-trip carries the admin's typed token
 		// back into this field, to that admin's own client only.
 		inputs.add(new Input("token", text(edit
-				? Lang.tr("savepoint_radio.input.token_keep", "Access token (blank keeps current)")
-				: Lang.tr("savepoint_radio.input.token_optional", "Access token (optional)"),
+				? Lang.tr("travelers_jukebox.input.token_keep", "Access token (blank keeps current)")
+				: Lang.tr("travelers_jukebox.input.token_optional", "Access token (optional)"),
 				pick(values, d -> d.token, ""), 512)));
 		// Optional override: now-playing is normally derived from the stream URL, but
 		// a non-SavePoint stream (or a moved now-playing endpoint) can set it here.
 		inputs.add(new Input("now_playing_url",
-				text(Lang.tr("savepoint_radio.input.now_playing_url", "Now Playing URL (optional)"),
+				text(Lang.tr("travelers_jukebox.input.now_playing_url", "Now Playing URL (optional)"),
 						pick(values, d -> d.nowPlayingUrl, ""), 512)));
 		// Per-disc on-air marquee layout (sow-006 review-feedback). Blank = the built-in
 		// "♪ {station} — LIVE — {title} · {artist}". Placeholders: {station} {title}
 		// {artist} {segment}; a missing field collapses its adjacent separator.
 		inputs.add(new Input("marquee_template",
-				text(Lang.tr("savepoint_radio.input.marquee_template",
+				text(Lang.tr("travelers_jukebox.input.marquee_template",
 						"Marquee: {station}/{title}/{artist}/{segment} (blank=default)"),
 						pick(values, d -> d.nowPlayingTemplate, ""), 128)));
 
@@ -302,14 +302,14 @@ public final class SavePointDialogs {
 		ActionButton cycle = cycleColorButton(currentColor, currentStyle, currentNameStyle, "hls_pull", editId);
 		ActionButton style = cycleStyleButton(currentStyle, currentColor, currentNameStyle, "hls_pull", editId);
 		ActionButton nameStyle = cycleNameStyleButton(currentNameStyle, currentColor, currentStyle, "hls_pull", editId);
-		ActionButton submit = saveButton(Lang.tr("savepoint_radio.button.save", "Save disc"), "hls_pull", editId, currentColor, currentStyle, currentNameStyle);
+		ActionButton submit = saveButton(Lang.tr("travelers_jukebox.button.save", "Save disc"), "hls_pull", editId, currentColor, currentStyle, currentNameStyle);
 		// sow-006 review-feedback: no Preview button - the preview refreshes on every form round-trip
 		// (any cycler / Save-validation error re-render), so a dedicated Preview action is redundant.
-		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("savepoint_radio.button.back", "Back"),
+		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("travelers_jukebox.button.back", "Back"),
 				edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
-				? brandTitle(Lang.tr("savepoint_radio.form.pull.title_edit", "Edit stream disc"))
-				: Lang.tr("savepoint_radio.form.pull.title_create", "New HLS disc"), body, inputs);
+				? brandTitle(Lang.tr("travelers_jukebox.form.pull.title_edit", "Edit stream disc"))
+				: Lang.tr("travelers_jukebox.form.pull.title_create", "New HLS disc"), body, inputs);
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
@@ -327,18 +327,18 @@ public final class SavePointDialogs {
 		discIconBody(registries, previewDef(values), 24, previewCaption(previewDef(values))).ifPresent(body::add);
 		body.add(edit
 				? body(Component.literal("Editing this file disc."))
-				: body(Lang.tr("savepoint_radio.form.file.body_create",
+				: body(Lang.tr("travelers_jukebox.form.file.body_create",
 						"New file disc - the server loops a finite audio file reached over HTTP (a direct link, or a file in the audio folder).")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
 			inputs.add(new Input("disc_id",
-					text(Lang.tr("savepoint_radio.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
+					text(Lang.tr("travelers_jukebox.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
 							pick(values, d -> d.discId, ""), 32)));
 		}
 		inputs.add(new Input("name",
-				text(Lang.tr("savepoint_radio.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
+				text(Lang.tr("travelers_jukebox.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		// sow-012: loop the file (default) or play it once and stop like a vanilla disc.
@@ -348,7 +348,7 @@ public final class SavePointDialogs {
 		// fields are removed here. The audio URL is the LAST input so the "Browse audio folder" action
 		// button renders directly beneath it.
 		inputs.add(new Input("stream_url",
-				text(Lang.tr("savepoint_radio.input.file_url", "Audio file URL (http/https)"),
+				text(Lang.tr("travelers_jukebox.input.file_url", "Audio file URL (http/https)"),
 						pick(values, d -> d.streamUrl, ""), 512)));
 
 		String currentStyle = pick(values, d -> d.baseDisc, DiscDefinition.DEFAULT_BASE_DISC);
@@ -356,7 +356,7 @@ public final class SavePointDialogs {
 		ActionButton cycle = cycleColorButton(currentColor, currentStyle, currentNameStyle, "file", editId);
 		ActionButton style = cycleStyleButton(currentStyle, currentColor, currentNameStyle, "file", editId);
 		ActionButton nameStyle = cycleNameStyleButton(currentNameStyle, currentColor, currentStyle, "file", editId);
-		ActionButton submit = saveButton(Lang.tr("savepoint_radio.button.save", "Save disc"), "file", editId, currentColor, currentStyle, currentNameStyle);
+		ActionButton submit = saveButton(Lang.tr("travelers_jukebox.button.save", "Save disc"), "file", editId, currentColor, currentStyle, currentNameStyle);
 		// "Browse audio folder" leads the actions so it sits right under the audio-file URL input.
 		// It is a CustomAll, so it submits every typed input; the colour/style/name-style ride in
 		// its payload too (they are button state, not form inputs), so the whole in-progress disc
@@ -364,15 +364,15 @@ public final class SavePointDialogs {
 		List<ActionButton> actions = List.of(
 				browseAudioButton(currentColor, currentStyle, currentNameStyle, editId),
 				cycle, style, nameStyle, submit,
-				navButton(Lang.tr("savepoint_radio.button.back", "Back"), edit ? "manage" : "new_disc", 150));
+				navButton(Lang.tr("travelers_jukebox.button.back", "Back"), edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
-				? brandTitle(Lang.tr("savepoint_radio.form.file.title_edit", "Edit file disc"))
-				: Lang.tr("savepoint_radio.form.file.title_create", "New file disc"), body, inputs);
+				? brandTitle(Lang.tr("travelers_jukebox.form.file.title_edit", "Edit file disc"))
+				: Lang.tr("travelers_jukebox.form.file.title_create", "New file disc"), body, inputs);
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
 	/**
-	 * sow-009 (P3): browse the audio folder ({@code config/savepoint_radio/audio/}) served
+	 * sow-009 (P3): browse the audio folder ({@code config/travelers_jukebox/audio/}) served
 	 * by {@link LocalAudioServer}. Each file opens a pre-filled {@link #createFileForm} whose
 	 * {@code streamUrl} is the file's internal loopback URL. Empty state points the admin at
 	 * the folder to drop files in.
@@ -391,11 +391,11 @@ public final class SavePointDialogs {
 			}
 		}
 		// Back carries too, so cancelling the browse returns to the form still filled in.
-		actions.add(carryNavButton(Lang.tr("savepoint_radio.button.back", "Back"), "create_file", null, 150, carry));
+		actions.add(carryNavButton(Lang.tr("travelers_jukebox.button.back", "Back"), "create_file", null, 150, carry));
 
 		String bodyText;
 		if (serverPort <= 0) {
-			bodyText = "The audio server is off (localAudioServerPort). Enable it in savepoint_radio.json "
+			bodyText = "The audio server is off (localAudioServerPort). Enable it in travelers_jukebox.json "
 					+ "or use a direct http link instead.";
 		} else if (files.isEmpty()) {
 			bodyText = "No audio files yet. Drop .mp3 / .ogg / .flac / .wav / .m4a into:\n"
@@ -404,7 +404,7 @@ public final class SavePointDialogs {
 			bodyText = "Pick a file to loop (" + files.size() + " in "
 					+ LocalAudioServer.audioDir() + "):";
 		}
-		CommonDialogData common = commonNone(brandTitle(Lang.tr("savepoint_radio.form.file.browse_title", "Audio folder")),
+		CommonDialogData common = commonNone(brandTitle(Lang.tr("travelers_jukebox.form.file.browse_title", "Audio folder")),
 				List.of(body(Component.literal(bodyText))), List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
@@ -422,22 +422,22 @@ public final class SavePointDialogs {
 		discIconBody(registries, previewDef(values), 24, previewCaption(previewDef(values))).ifPresent(body::add);
 		body.add(edit
 				? body(Component.literal("Editing this platform-link disc."))
-				: body(Lang.tr("savepoint_radio.form.platform.body_create",
+				: body(Lang.tr("travelers_jukebox.form.platform.body_create",
 						"New platform disc - paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link; yt-dlp resolves it to audio.")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
 			inputs.add(new Input("disc_id",
-					text(Lang.tr("savepoint_radio.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
+					text(Lang.tr("travelers_jukebox.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
 							pick(values, d -> d.discId, ""), 32)));
 		}
 		inputs.add(new Input("name",
-				text(Lang.tr("savepoint_radio.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
+				text(Lang.tr("travelers_jukebox.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		inputs.add(new Input("stream_url",
-				text(Lang.tr("savepoint_radio.input.platform_url", "Platform link (SoundCloud / Mixcloud / Twitch / ...)"),
+				text(Lang.tr("travelers_jukebox.input.platform_url", "Platform link (SoundCloud / Mixcloud / Twitch / ...)"),
 						pick(values, d -> d.streamUrl, ""), 512)));
 		// sow-012: a non-live VOD (e.g. a SoundCloud track) with repeat off plays once and stops; a live
 		// stream (Twitch/Kick) keeps going regardless of this.
@@ -453,12 +453,12 @@ public final class SavePointDialogs {
 		ActionButton cycle = cycleColorButton(currentColor, currentStyle, currentNameStyle, "platform", editId);
 		ActionButton style = cycleStyleButton(currentStyle, currentColor, currentNameStyle, "platform", editId);
 		ActionButton nameStyle = cycleNameStyleButton(currentNameStyle, currentColor, currentStyle, "platform", editId);
-		ActionButton submit = saveButton(Lang.tr("savepoint_radio.button.save", "Save disc"), "platform", editId, currentColor, currentStyle, currentNameStyle);
-		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("savepoint_radio.button.back", "Back"),
+		ActionButton submit = saveButton(Lang.tr("travelers_jukebox.button.save", "Save disc"), "platform", editId, currentColor, currentStyle, currentNameStyle);
+		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("travelers_jukebox.button.back", "Back"),
 				edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
-				? brandTitle(Lang.tr("savepoint_radio.form.platform.title_edit", "Edit platform disc"))
-				: Lang.tr("savepoint_radio.form.platform.title_create", "New platform disc"), body, inputs);
+				? brandTitle(Lang.tr("travelers_jukebox.form.platform.title_edit", "Edit platform disc"))
+				: Lang.tr("travelers_jukebox.form.platform.title_create", "New platform disc"), body, inputs);
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
@@ -478,18 +478,18 @@ public final class SavePointDialogs {
 		discIconBody(registries, previewDef(values), 24, previewCaption(previewDef(values))).ifPresent(body::add);
 		body.add(edit
 				? body(Component.literal("Editing this RTMP receive disc."))
-				: body(Lang.tr("savepoint_radio.form.rtmp.body_create",
+				: body(Lang.tr("travelers_jukebox.form.rtmp.body_create",
 						"New RTMP receive disc - a DJ/OBS/relay publishes into the server.")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
 			inputs.add(new Input("disc_id",
-					text(Lang.tr("savepoint_radio.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
+					text(Lang.tr("travelers_jukebox.input.disc_id", "Disc ID (a-z0-9_-, 1..32)"),
 							pick(values, d -> d.discId, ""), 32)));
 		}
 		inputs.add(new Input("name",
-				text(Lang.tr("savepoint_radio.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
+				text(Lang.tr("travelers_jukebox.input.name", "Display name"), pick(values, d -> d.name, ""), 48)));
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		// Seed the next FREE port, not a constant. Seeding 1936 every time meant a second
@@ -499,13 +499,13 @@ public final class SavePointDialogs {
 		String portInitial = values.map(d -> d.rtmpPort).filter(p -> p > 0).map(String::valueOf)
 				.orElseGet(SavePointDialogs::nextFreeRtmpPort);
 		inputs.add(new Input("rtmp_port",
-				text(Lang.tr("savepoint_radio.input.rtmp_port", "RTMP port (1024..65535)"), portInitial, 5)));
+				text(Lang.tr("travelers_jukebox.input.rtmp_port", "RTMP port (1024..65535)"), portInitial, 5)));
 		// Fresh create seeds a random key; a Preview round-trip carries the admin's
 		// key back so it is not regenerated. Fresh edit is blank (blank keeps
 		// current); a Preview round-trip on edit refills the typed key.
 		inputs.add(new Input("stream_key", text(edit
-				? Lang.tr("savepoint_radio.input.stream_key_keep", "Stream key (blank keeps current)")
-				: Lang.tr("savepoint_radio.input.stream_key", "Stream key"),
+				? Lang.tr("travelers_jukebox.input.stream_key_keep", "Stream key (blank keeps current)")
+				: Lang.tr("travelers_jukebox.input.stream_key", "Stream key"),
 				pick(values, d -> d.streamKey, edit ? "" : generateStreamKey()), 64)));
 		inputs.add(new Input("rtmp_bind", bindInput(pick(values, d -> d.rtmpBind, DiscDefinition.DEFAULT_RTMP_BIND))));
 		// Optional: an RTMP ingest carries no station identity, so paste the station's
@@ -513,13 +513,13 @@ public final class SavePointDialogs {
 		// http://127.0.0.1:7101/api/public/stations/2/now-playing - use 127.0.0.1, not
 		// "localhost", which can resolve to IPv6 [::1] and time out). Not a secret.
 		inputs.add(new Input("now_playing_url",
-				text(Lang.tr("savepoint_radio.input.now_playing_url", "Now Playing URL (optional)"),
+				text(Lang.tr("travelers_jukebox.input.now_playing_url", "Now Playing URL (optional)"),
 						pick(values, d -> d.nowPlayingUrl, ""), 512)));
 		// Per-disc on-air marquee layout (sow-006 review-feedback). Blank = the built-in
 		// "♪ {station} — LIVE — {title} · {artist}". Placeholders: {station} {title}
 		// {artist} {segment}; a missing field collapses its adjacent separator.
 		inputs.add(new Input("marquee_template",
-				text(Lang.tr("savepoint_radio.input.marquee_template",
+				text(Lang.tr("travelers_jukebox.input.marquee_template",
 						"Marquee: {station}/{title}/{artist}/{segment} (blank=default)"),
 						pick(values, d -> d.nowPlayingTemplate, ""), 128)));
 
@@ -528,12 +528,12 @@ public final class SavePointDialogs {
 		ActionButton cycle = cycleColorButton(currentColor, currentStyle, currentNameStyle, "rtmp_receive", editId);
 		ActionButton style = cycleStyleButton(currentStyle, currentColor, currentNameStyle, "rtmp_receive", editId);
 		ActionButton nameStyle = cycleNameStyleButton(currentNameStyle, currentColor, currentStyle, "rtmp_receive", editId);
-		ActionButton submit = saveButton(Lang.tr("savepoint_radio.button.save", "Save disc"), "rtmp_receive", editId, currentColor, currentStyle, currentNameStyle);
-		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("savepoint_radio.button.back", "Back"),
+		ActionButton submit = saveButton(Lang.tr("travelers_jukebox.button.save", "Save disc"), "rtmp_receive", editId, currentColor, currentStyle, currentNameStyle);
+		List<ActionButton> actions = List.of(cycle, style, nameStyle, submit, navButton(Lang.tr("travelers_jukebox.button.back", "Back"),
 				edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
-				? brandTitle(Lang.tr("savepoint_radio.form.rtmp.title_edit", "Edit RTMP disc"))
-				: Lang.tr("savepoint_radio.form.rtmp.title_create", "New RTMP disc"), body, inputs);
+				? brandTitle(Lang.tr("travelers_jukebox.form.rtmp.title_edit", "Edit RTMP disc"))
+				: Lang.tr("travelers_jukebox.form.rtmp.title_create", "New RTMP disc"), body, inputs);
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
@@ -594,7 +594,7 @@ public final class SavePointDialogs {
 			body.add(body(error ? error(status) : success(status)));
 		}
 		if (discs.isEmpty()) {
-			body.add(body(Lang.tr("savepoint_radio.manage.empty",
+			body.add(body(Lang.tr("travelers_jukebox.manage.empty",
 					"No discs yet - use + New disc to add one.")));
 		} else {
 			body.add(body(Component.literal(discs.size()
@@ -609,13 +609,13 @@ public final class SavePointDialogs {
 		for (DiscDefinition d : discs) {
 			actions.add(navIdButton(rowLabel(d), "detail", d.discId, 260));
 		}
-		actions.add(navButton(Lang.tr("savepoint_radio.button.new_disc", "+ New disc"),
-				Lang.tr("savepoint_radio.menu.new_tip", "Stream from a URL, or receive a broadcast"),
+		actions.add(navButton(Lang.tr("travelers_jukebox.button.new_disc", "+ New disc"),
+				Lang.tr("travelers_jukebox.menu.new_tip", "Stream from a URL, or receive a broadcast"),
 				"new_disc", 220));
-		actions.add(navButton(Lang.tr("savepoint_radio.button.back", "Back"), "root", 220));
+		actions.add(navButton(Lang.tr("travelers_jukebox.button.back", "Back"), "root", 220));
 
 		CommonDialogData common = commonNone(brandTitle(
-				Lang.tr("savepoint_radio.manage.title", "Discs")), body, List.of());
+				Lang.tr("travelers_jukebox.manage.title", "Discs")), body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
@@ -659,9 +659,9 @@ public final class SavePointDialogs {
 			body.add(connRow("Server", local.server()));
 			body.add(connRow("Stream key", def.streamKey));
 			body.add(connRow("Full URL", local.fullUrl()));
-			actions.add(copyButton(Lang.tr("savepoint_radio.copy.server", "Copy server"), local.server()));
-			actions.add(copyButton(Lang.tr("savepoint_radio.copy.key", "Copy stream key"), def.streamKey));
-			actions.add(copyButton(Lang.tr("savepoint_radio.copy.full", "Copy full URL"), local.fullUrl()));
+			actions.add(copyButton(Lang.tr("travelers_jukebox.copy.server", "Copy server"), local.server()));
+			actions.add(copyButton(Lang.tr("travelers_jukebox.copy.key", "Copy stream key"), def.streamKey));
+			actions.add(copyButton(Lang.tr("travelers_jukebox.copy.full", "Copy full URL"), local.fullUrl()));
 
 			RadioConfig config = RadioConfig.get();
 			if (RtmpEndpoints.bindsAllInterfaces(def)) {
@@ -670,13 +670,13 @@ public final class SavePointDialogs {
 					body.add(body(Component.literal("▸ External broadcasters (bind 0.0.0.0):")));
 					body.add(connRow("Server", ext.get().server()));
 					body.add(connRow("Full URL", ext.get().fullUrl()));
-					actions.add(copyButton(Lang.tr("savepoint_radio.copy.ext_server", "Copy external server"),
+					actions.add(copyButton(Lang.tr("travelers_jukebox.copy.ext_server", "Copy external server"),
 							ext.get().server()));
-					actions.add(copyButton(Lang.tr("savepoint_radio.copy.ext_full", "Copy external full URL"),
+					actions.add(copyButton(Lang.tr("travelers_jukebox.copy.ext_full", "Copy external full URL"),
 							ext.get().fullUrl()));
 				} else {
 					body.add(body(note("Binds 0.0.0.0 but no rtmpPublicHost is set - set rtmpPublicHost "
-							+ "in savepoint_radio.json to also show an external ingest URL.")));
+							+ "in travelers_jukebox.json to also show an external ingest URL.")));
 				}
 			} else {
 				// Not 0.0.0.0: the listener is bound to a specific interface (the
@@ -692,16 +692,16 @@ public final class SavePointDialogs {
 			String shown = endpoint.displayUrl();
 			body.add(body(Component.literal("▸ Streams audio from:")));
 			body.add(connRow("Source", shown));
-			actions.add(copyButton(Lang.tr("savepoint_radio.copy.source", "Copy source URL"), shown));
+			actions.add(copyButton(Lang.tr("travelers_jukebox.copy.source", "Copy source URL"), shown));
 			body.add(body(note("Idle means the station isn't broadcasting yet (a status, not an error). "
 					+ "Any token stays masked and never appears in this URL.")));
 		}
 
-		actions.add(navIdButton(Lang.tr("savepoint_radio.button.edit", "Edit"), "edit", def.discId, 220));
-		actions.add(testButton(Lang.tr("savepoint_radio.button.test", "Test"), def.discId, 220));
-		actions.add(navIdButton(Lang.tr("savepoint_radio.button.give", "Give"), "give_disc", def.discId, 220));
-		actions.add(navIdButton(Lang.tr("savepoint_radio.button.delete", "Delete"), "delete_confirm", def.discId, 220));
-		actions.add(navButton(Lang.tr("savepoint_radio.button.back_to_discs", "Back to discs"), "manage", 220));
+		actions.add(navIdButton(Lang.tr("travelers_jukebox.button.edit", "Edit"), "edit", def.discId, 220));
+		actions.add(testButton(Lang.tr("travelers_jukebox.button.test", "Test"), def.discId, 220));
+		actions.add(navIdButton(Lang.tr("travelers_jukebox.button.give", "Give"), "give_disc", def.discId, 220));
+		actions.add(navIdButton(Lang.tr("travelers_jukebox.button.delete", "Delete"), "delete_confirm", def.discId, 220));
+		actions.add(navButton(Lang.tr("travelers_jukebox.button.back_to_discs", "Back to discs"), "manage", 220));
 
 		CommonDialogData common = commonNone(title, body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
@@ -711,7 +711,7 @@ public final class SavePointDialogs {
 	 * The audible-monitor notice shown once the "Test" button has started a
 	 * monitor: the disc icon, a "listen now" line, a cheap (non-blocking) feed-state
 	 * hint, and the auto-stop window, with a Stop button
-	 * ({@code savepoint_radio:stop_monitor}) and a Back to the disc's detail page.
+	 * ({@code travelers_jukebox:stop_monitor}) and a Back to the disc's detail page.
 	 * Pressing Back leaves the monitor running (it still auto-stops on timeout /
 	 * disconnect); only Stop tears it down immediately. Uses {@link #commonNone} so
 	 * the reply pushed after Stop stays on screen.
@@ -733,8 +733,8 @@ public final class SavePointDialogs {
 				+ "s, when you disconnect, or when you press Stop.")));
 
 		List<ActionButton> actions = List.of(
-				stopMonitorButton(Lang.tr("savepoint_radio.button.stop_monitor", "Stop monitoring"), def.discId, 220),
-				navIdButton(Lang.tr("savepoint_radio.button.back_to_disc", "Back to disc"), "detail", def.discId, 220));
+				stopMonitorButton(Lang.tr("travelers_jukebox.button.stop_monitor", "Stop monitoring"), def.discId, 220),
+				navIdButton(Lang.tr("travelers_jukebox.button.back_to_disc", "Back to disc"), "detail", def.discId, 220));
 		CommonDialogData common = commonNone(title, body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
@@ -749,9 +749,9 @@ public final class SavePointDialogs {
 		CompoundTag additions = new CompoundTag();
 		additions.putString("id", discId);
 		Action delete = new CustomAll(id("delete"), Optional.of(additions));
-		ActionButton cancel = navIdButton(Lang.tr("savepoint_radio.button.cancel", "Cancel"), "detail", discId, 220);
+		ActionButton cancel = navIdButton(Lang.tr("travelers_jukebox.button.cancel", "Cancel"), "detail", discId, 220);
 		ActionButton confirm = new ActionButton(
-				new CommonButtonData(Lang.tr("savepoint_radio.button.delete_confirm", "Delete permanently")
+				new CommonButtonData(Lang.tr("travelers_jukebox.button.delete_confirm", "Delete permanently")
 						.copy().withStyle(s -> s.withColor(TextColor.fromRgb(ERROR_COLOR))), 220),
 				Optional.of(delete));
 		CommonDialogData common = commonNone(Component.literal("Delete disc?")
@@ -765,8 +765,8 @@ public final class SavePointDialogs {
 	public static Dialog giveMenu(HolderLookup.Provider registries) {
 		List<DiscDefinition> discs = DiscRegistry.get().list();
 		if (discs.isEmpty()) {
-			return noticeThen(Lang.tr("savepoint_radio.give.title", "Give disc"),
-					Lang.tr("savepoint_radio.give.empty", "No discs to give yet - create one first."), "root");
+			return noticeThen(Lang.tr("travelers_jukebox.give.title", "Give disc"),
+					Lang.tr("travelers_jukebox.give.empty", "No discs to give yet - create one first."), "root");
 		}
 		List<SingleOptionInput.Entry> entries = new ArrayList<>();
 		boolean first = true;
@@ -776,19 +776,19 @@ public final class SavePointDialogs {
 			first = false;
 		}
 		Input choice = new Input("disc_id",
-				new SingleOptionInput(220, entries, Lang.tr("savepoint_radio.give.choice", "Disc"), true));
+				new SingleOptionInput(220, entries, Lang.tr("travelers_jukebox.give.choice", "Disc"), true));
 		Input player = new Input("player",
-				text(Lang.tr("savepoint_radio.input.player", "Player (blank = you)"), "", 32));
+				text(Lang.tr("travelers_jukebox.input.player", "Player (blank = you)"), "", 32));
 
 		CompoundTag additions = new CompoundTag();
 		additions.putString("ret", "root");
 		ActionButton give = new ActionButton(
-				new CommonButtonData(Lang.tr("savepoint_radio.button.give", "Give disc"),
-						Optional.of(Lang.tr("savepoint_radio.give.tip", "Give to yourself, or the named player")), 150),
+				new CommonButtonData(Lang.tr("travelers_jukebox.button.give", "Give disc"),
+						Optional.of(Lang.tr("travelers_jukebox.give.tip", "Give to yourself, or the named player")), 150),
 				Optional.of(new CustomAll(id("give"), Optional.of(additions))));
-		List<ActionButton> actions = List.of(give, navButton(Lang.tr("savepoint_radio.button.back", "Back"), "root", 150));
-		CommonDialogData common = commonNone(brandTitle(Lang.tr("savepoint_radio.give.title", "Give disc")),
-				List.of(body(Lang.tr("savepoint_radio.give.body", "Give a radio disc to a player."))),
+		List<ActionButton> actions = List.of(give, navButton(Lang.tr("travelers_jukebox.button.back", "Back"), "root", 150));
+		CommonDialogData common = commonNone(brandTitle(Lang.tr("travelers_jukebox.give.title", "Give disc")),
+				List.of(body(Lang.tr("travelers_jukebox.give.body", "Give a radio disc to a player."))),
 				List.of(choice, player));
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
@@ -810,16 +810,16 @@ public final class SavePointDialogs {
 		body.add(body(Component.literal("Give this disc to yourself, or type an online player's name.")));
 
 		Input player = new Input("player",
-				text(Lang.tr("savepoint_radio.input.player", "Player (blank = you)"), "", 32));
+				text(Lang.tr("travelers_jukebox.input.player", "Player (blank = you)"), "", 32));
 
 		CompoundTag additions = new CompoundTag();
 		additions.putString("disc_id", def.discId);
 		additions.putString("ret", "detail");
 		ActionButton give = new ActionButton(
-				new CommonButtonData(Lang.tr("savepoint_radio.button.give", "Give disc"),
-						Optional.of(Lang.tr("savepoint_radio.give.tip", "Give to yourself, or the named player")), 220),
+				new CommonButtonData(Lang.tr("travelers_jukebox.button.give", "Give disc"),
+						Optional.of(Lang.tr("travelers_jukebox.give.tip", "Give to yourself, or the named player")), 220),
 				Optional.of(new CustomAll(id("give"), Optional.of(additions))));
-		ActionButton back = navIdButton(Lang.tr("savepoint_radio.button.back", "Back"), "detail", def.discId, 220);
+		ActionButton back = navIdButton(Lang.tr("travelers_jukebox.button.back", "Back"), "detail", def.discId, 220);
 		CommonDialogData common = commonNone(title, body, List.of(player));
 		return new MultiActionDialog(common, List.of(give, back), Optional.empty(), 1);
 	}
@@ -856,8 +856,8 @@ public final class SavePointDialogs {
 	public static Dialog noticeThenNav(Component title, Component message, String navTo, String navId) {
 		CommonDialogData common = commonNone(title, List.of(body(message)), List.of());
 		ActionButton ok = navId == null || navId.isEmpty()
-				? navButton(Lang.tr("savepoint_radio.button.ok", "OK"), navTo, 150)
-				: navIdButton(Lang.tr("savepoint_radio.button.ok", "OK"), navTo, navId, 150);
+				? navButton(Lang.tr("travelers_jukebox.button.ok", "OK"), navTo, 150)
+				: navIdButton(Lang.tr("travelers_jukebox.button.ok", "OK"), navTo, navId, 150);
 		return new NoticeDialog(common, ok);
 	}
 
@@ -884,7 +884,7 @@ public final class SavePointDialogs {
 	public static Dialog errorThenForm(String title, String message, CompoundTag submitted) {
 		CommonDialogData common = commonNone(error(title), List.of(body(Component.literal(message))), List.of());
 		return new NoticeDialog(common, carryNavButton(
-				Lang.tr("savepoint_radio.button.back_to_form", "Back to form"), "form_back", null, 150, submitted));
+				Lang.tr("travelers_jukebox.button.back_to_form", "Back to form"), "form_back", null, 150, submitted));
 	}
 
 	/** A test-result notice returning to the disc's detail page. */
@@ -1074,7 +1074,7 @@ public final class SavePointDialogs {
 	/**
 	 * An {@link ItemBody} rendering the disc's actual item (id + coloured name +
 	 * jukebox song, verbatim from {@link RadioDiscFactory}), optionally captioned.
-	 * Empty when the {@code savepoint_radio:radio} jukebox song is not loaded - the
+	 * Empty when the {@code travelers_jukebox:radio} jukebox song is not loaded - the
 	 * caller simply omits the icon rather than failing the whole dialog.
 	 */
 	private static Optional<DialogBody> discIconBody(HolderLookup.Provider registries, DiscDefinition def,
@@ -1094,7 +1094,7 @@ public final class SavePointDialogs {
 	private static DiscDefinition brandDef() {
 		DiscDefinition def = new DiscDefinition();
 		def.discId = "savepoint";
-		def.name = "SavePoint Radio";
+		def.name = "Traveler's Jukebox";
 		def.nameColorHex = DEFAULT_COLOR;
 		def.baseDisc = DiscDefinition.DEFAULT_BASE_DISC;
 		return def;
@@ -1122,7 +1122,7 @@ public final class SavePointDialogs {
 		NumberRangeInput.RangeInfo range = new NumberRangeInput.RangeInfo(
 				1f, 512f, Optional.of(init), Optional.of(1f));
 		return new NumberRangeInput(220,
-				Lang.tr("savepoint_radio.input.radius", "Audible radius (blocks)"),
+				Lang.tr("travelers_jukebox.input.radius", "Audible radius (blocks)"),
 				"options.generic_value", range);
 	}
 
@@ -1145,7 +1145,7 @@ public final class SavePointDialogs {
 		entries.add(new SingleOptionInput.Entry("0.0.0.0",
 				Optional.of(Component.literal("0.0.0.0 (all interfaces)")), any));
 		return new SingleOptionInput(220, List.copyOf(entries),
-				Lang.tr("savepoint_radio.input.rtmp_bind", "RTMP bind"), true);
+				Lang.tr("travelers_jukebox.input.rtmp_bind", "RTMP bind"), true);
 	}
 
 	/**
@@ -1159,7 +1159,7 @@ public final class SavePointDialogs {
 						Optional.of(Component.literal("Repeat (loop)")), repeat),
 				new SingleOptionInput.Entry("off",
 						Optional.of(Component.literal("Play once, then stop")), !repeat));
-		return new SingleOptionInput(220, entries, Lang.tr("savepoint_radio.input.repeat", "Repeat"), true);
+		return new SingleOptionInput(220, entries, Lang.tr("travelers_jukebox.input.repeat", "Repeat"), true);
 	}
 
 	private static ActionButton navButton(Component label, String to, int width) {
@@ -1204,7 +1204,7 @@ public final class SavePointDialogs {
 		additions.putString("name_style", nameStyle == null || nameStyle.isBlank() ? "plain" : nameStyle);
 		Action action = new CustomAll(id("nav"), Optional.of(additions));
 		return new ActionButton(new CommonButtonData(
-				Lang.tr("savepoint_radio.button.browse_audio", "Browse audio folder"), 220), Optional.of(action));
+				Lang.tr("travelers_jukebox.button.browse_audio", "Browse audio folder"), 220), Optional.of(action));
 	}
 
 	/**
@@ -1223,7 +1223,7 @@ public final class SavePointDialogs {
 		return new ActionButton(new CommonButtonData(label, width), Optional.of(action));
 	}
 
-	/** A per-disc "Test feed" button - emits {@code savepoint_radio:test {id}}. */
+	/** A per-disc "Test feed" button - emits {@code travelers_jukebox:test {id}}. */
 	private static ActionButton testButton(Component label, String discId, int width) {
 		CompoundTag additions = new CompoundTag();
 		additions.putString("id", discId);
@@ -1231,7 +1231,7 @@ public final class SavePointDialogs {
 		return new ActionButton(new CommonButtonData(label, width), Optional.of(action));
 	}
 
-	/** The monitor notice's "Stop" button - emits {@code savepoint_radio:stop_monitor {id}}. */
+	/** The monitor notice's "Stop" button - emits {@code travelers_jukebox:stop_monitor {id}}. */
 	private static ActionButton stopMonitorButton(Component label, String discId, int width) {
 		CompoundTag additions = new CompoundTag();
 		additions.putString("id", discId);
@@ -1251,7 +1251,7 @@ public final class SavePointDialogs {
 
 	/**
 	 * The "Name color: <name> ▶" cycler. Clicking it submits the current inputs to
-	 * {@code savepoint_radio:cycle_color}, which advances the colour to the next
+	 * {@code travelers_jukebox:cycle_color}, which advances the colour to the next
 	 * {@link #COLORS} entry and re-renders the SAME form - so the preview item and
 	 * this label update immediately (the only automatic refresh vanilla dialogs
 	 * allow). The current colour rides in the payload so nothing is lost.
@@ -1284,14 +1284,14 @@ public final class SavePointDialogs {
 						.withStyle(s -> s.withColor(TextColor.fromRgb(parseColorHex(currentHex, BRAND_GREEN)))))
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
-				Optional.of(Lang.tr("savepoint_radio.button.cycle_color_tip",
+				Optional.of(Lang.tr("travelers_jukebox.button.cycle_color_tip",
 						"Change the disc name colour - the preview updates instantly")), 220),
 				Optional.of(action));
 	}
 
 	/**
 	 * The "Disc style: <name> ▶" cycler, shown right under the colour cycler. Clicking
-	 * it submits the current inputs to {@code savepoint_radio:cycle_style}, which
+	 * it submits the current inputs to {@code travelers_jukebox:cycle_style}, which
 	 * advances the base disc to the next {@link #STYLES} entry and re-renders the SAME
 	 * form - so the preview icon updates immediately. Both choices ride in the payload
 	 * so cycling the style never loses the chosen colour (and vice-versa).
@@ -1305,7 +1305,7 @@ public final class SavePointDialogs {
 						.withStyle(s -> s.withColor(TextColor.fromRgb(BRAND_GREEN))))
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
-				Optional.of(Lang.tr("savepoint_radio.button.cycle_style_tip",
+				Optional.of(Lang.tr("travelers_jukebox.button.cycle_style_tip",
 						"Change the disc's item style - the preview icon updates instantly")), 220),
 				Optional.of(action));
 	}
@@ -1326,7 +1326,7 @@ public final class SavePointDialogs {
 						.withStyle(s -> s.withColor(TextColor.fromRgb(parseColorHex(currentHex, BRAND_GREEN)))))
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
-				Optional.of(Lang.tr("savepoint_radio.button.cycle_name_style_tip",
+				Optional.of(Lang.tr("travelers_jukebox.button.cycle_name_style_tip",
 						"Change the display-name font style - the preview updates instantly")), 220),
 				Optional.of(action));
 	}
@@ -1414,7 +1414,7 @@ public final class SavePointDialogs {
 	private static ActionButton copyButton(Component label, String value) {
 		Action copy = new StaticAction(new ClickEvent.CopyToClipboard(value == null ? "" : value));
 		return new ActionButton(new CommonButtonData(label,
-				Optional.of(Lang.tr("savepoint_radio.copy.tooltip", "Copy to clipboard")), 220),
+				Optional.of(Lang.tr("travelers_jukebox.copy.tooltip", "Copy to clipboard")), 220),
 				Optional.of(copy));
 	}
 

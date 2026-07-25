@@ -71,7 +71,7 @@ final class VoiceChatSink implements AudioSink {
 
 	@Override
 	public void open() {
-		SavePointRadioMod.LOGGER.info("[radio] sink open type=voicechat {} station={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] sink open type=voicechat {} station={}",
 				posDescription, stationKey);
 	}
 
@@ -124,7 +124,7 @@ final class VoiceChatSink implements AudioSink {
 					encoder.close();
 				}
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] voicechat encoder close failed {} station={}",
+				SavePointRadioMod.LOGGER.warn("[jukebox] voicechat encoder close failed {} station={}",
 						posDescription, stationKey, t);
 			}
 		}
@@ -133,10 +133,10 @@ final class VoiceChatSink implements AudioSink {
 		try {
 			channel.flush();
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] voicechat channel flush failed {} station={}",
+			SavePointRadioMod.LOGGER.warn("[jukebox] voicechat channel flush failed {} station={}",
 					posDescription, stationKey, t);
 		}
-		SavePointRadioMod.LOGGER.info("[radio] sink close type=voicechat {} framesSent={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] sink close type=voicechat {} framesSent={}",
 				posDescription, framesSent.get());
 	}
 
@@ -145,7 +145,7 @@ final class VoiceChatSink implements AudioSink {
 		if (!sendFailureLogged) {
 			sendFailureLogged = true;
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] sink send failed type=voicechat {} station={} (suppressing further send errors)",
+					"[jukebox] sink send failed type=voicechat {} station={} (suppressing further send errors)",
 					posDescription, stationKey, t);
 		}
 	}

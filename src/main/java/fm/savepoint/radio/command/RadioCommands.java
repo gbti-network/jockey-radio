@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Registers {@code /radiodisc give [station] [player]} and the dev inspection
- * subcommand {@code /radiodisc sessions} (both permission level 2).
+ * Registers {@code /jukeboxdisc give [station] [player]} and the dev inspection
+ * subcommand {@code /jukeboxdisc sessions} (both permission level 2).
  *
  * <p>The station defaults to the configured default station and the target
  * player defaults to the executing player; the console must name a player.</p>
@@ -41,7 +41,7 @@ public final class RadioCommands {
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(
-					Commands.literal("radiodisc")
+					Commands.literal("jukeboxdisc")
 							.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 							.then(Commands.literal("give")
 									.executes(ctx -> give(ctx, null, null))
@@ -66,12 +66,12 @@ public final class RadioCommands {
 							.then(Commands.literal("diag")
 									.executes(RadioCommands::diag)));
 
-			// Admin disc tree. Bare /savepoint opens the dialog UI (W2); the
+			// Admin disc tree. Bare /jukebox opens the dialog UI (W2); the
 			// give/list/reload subcommands stay for console/headless use. Gated
 			// at op level adminPermissionLevel (default 3 = LEVEL_ADMINS), and the
 			// dialog handler re-checks the same gate on every submit.
 			dispatcher.register(
-					Commands.literal("savepoint")
+					Commands.literal("jukebox")
 							.requires(Commands.hasPermission(adminPermissionCheck()))
 							.executes(RadioCommands::openMenu)
 							.then(Commands.literal("give")
@@ -99,7 +99,7 @@ public final class RadioCommands {
 	}
 
 	/**
-	 * The permission gate for {@code /savepoint}, read from config at
+	 * The permission gate for {@code /jukebox}, read from config at
 	 * registration ({@code adminPermissionLevel}, default 3). The
 	 * per-submit dialog handler in W2 will re-check the same gate server-side.
 	 */
@@ -210,14 +210,14 @@ public final class RadioCommands {
 		ServerPlayer player = target != null ? target : source.getPlayer();
 		if (player == null) {
 			source.sendFailure(Component.literal(
-					"The console must specify a player: /radiodisc give <station> <player>"));
+					"The console must specify a player: /jukeboxdisc give <station> <player>"));
 			return 0;
 		}
 
 		Optional<ItemStack> disc = RadioDiscFactory.createDisc(source.registryAccess(), key, station);
 		if (disc.isEmpty()) {
 			source.sendFailure(Component.literal(
-					"Could not create the radio disc: jukebox song 'savepoint_radio:radio' is not loaded."));
+					"Could not create the radio disc: jukebox song 'travelers_jukebox:radio' is not loaded."));
 			return 0;
 		}
 
@@ -236,11 +236,11 @@ public final class RadioCommands {
 	}
 
 	// ------------------------------------------------------------------
-	// /savepoint (admin disc registry)
+	// /jukebox (admin disc registry)
 	// ------------------------------------------------------------------
 
 	/**
-	 * Opens the {@code /savepoint} root dialog for the executing player. Requires
+	 * Opens the {@code /jukebox} root dialog for the executing player. Requires
 	 * a player context (the dialog is pushed to a client connection); the console
 	 * uses the give/list/reload subcommands instead.
 	 */
@@ -248,7 +248,7 @@ public final class RadioCommands {
 		ServerPlayer player = ctx.getSource().getPlayer();
 		if (player == null) {
 			ctx.getSource().sendFailure(Component.literal(
-					"Only a player can open the SavePoint Radio menu. Use /savepoint give|list|reload from the console."));
+					"Only a player can open the Traveler's Jukebox menu. Use /jukebox give|list|reload from the console."));
 			return 0;
 		}
 		DialogScreens.send(player, SavePointDialogs.rootMenu(player.registryAccess()));
@@ -270,14 +270,14 @@ public final class RadioCommands {
 		ServerPlayer player = target != null ? target : source.getPlayer();
 		if (player == null) {
 			source.sendFailure(Component.literal(
-					"The console must specify a player: /savepoint give <discId> <player>"));
+					"The console must specify a player: /jukebox give <discId> <player>"));
 			return 0;
 		}
 
 		Optional<ItemStack> disc = RadioDiscFactory.createFromDefinition(source.registryAccess(), def);
 		if (disc.isEmpty()) {
 			source.sendFailure(Component.literal(
-					"Could not create the radio disc: jukebox song 'savepoint_radio:radio' is not loaded."));
+					"Could not create the radio disc: jukebox song 'travelers_jukebox:radio' is not loaded."));
 			return 0;
 		}
 

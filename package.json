@@ -1,8 +1,8 @@
 {
-  "name": "minecraft-savepoint-radio",
+  "name": "minecraft-travelers-jukebox",
   "version": "0.1.0",
   "private": true,
-  "description": "Dev shortcuts for the SavePoint Radio Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
+  "description": "Dev shortcuts for the Traveler's Jukebox Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
   "scripts": {
     "release": "node scripts/release.mjs",
     "release:minor": "node scripts/release.mjs minor",

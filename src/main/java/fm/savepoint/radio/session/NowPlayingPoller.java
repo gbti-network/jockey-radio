@@ -98,7 +98,7 @@ public final class NowPlayingPoller {
 			return; // already running
 		}
 		ThreadFactory factory = runnable -> {
-			Thread thread = new Thread(runnable, "savepoint-radio-nowplaying");
+			Thread thread = new Thread(runnable, "travelers-jukebox-nowplaying");
 			thread.setDaemon(true);
 			return thread;
 		};
@@ -117,7 +117,7 @@ public final class NowPlayingPoller {
 		unauthorizedLogged.set(false); // a fresh run may log its first 401 again
 		scheduler = Executors.newSingleThreadScheduledExecutor(factory);
 		// The one log line the contract allows when enabled.
-		SavePointRadioMod.LOGGER.info("[radio] now-playing poller enabled interval={}s", seconds);
+		SavePointRadioMod.LOGGER.info("[jukebox] now-playing poller enabled interval={}s", seconds);
 		scheduler.scheduleWithFixedDelay(this::pollAllSafely, seconds, seconds, TimeUnit.SECONDS);
 	}
 
@@ -187,7 +187,7 @@ public final class NowPlayingPoller {
 			drain(pending);
 		} catch (Throwable t) {
 			// Defensive: keep the scheduled task alive no matter what.
-			SavePointRadioMod.LOGGER.debug("[radio] now-playing poll pass error", t);
+			SavePointRadioMod.LOGGER.debug("[jukebox] now-playing poll pass error", t);
 		}
 	}
 
@@ -227,7 +227,7 @@ public final class NowPlayingPoller {
 			try {
 				handleResponse(p.session(), p.def(), response);
 			} catch (Throwable handleFailure) {
-				SavePointRadioMod.LOGGER.debug("[radio] now-playing handle error", handleFailure);
+				SavePointRadioMod.LOGGER.debug("[jukebox] now-playing handle error", handleFailure);
 			}
 		}
 	}
@@ -271,7 +271,7 @@ public final class NowPlayingPoller {
 			session.updateNowPlaying(null);
 		}
 		SavePointRadioMod.LOGGER.debug(
-				"[radio] now-playing http status={} station={} staleStreak={}", status, def.discId, streak);
+				"[jukebox] now-playing http status={} station={} staleStreak={}", status, def.discId, streak);
 	}
 
 	/** Processes one received HTTP response. Runs on the poller thread (single-threaded). */
@@ -308,7 +308,7 @@ public final class NowPlayingPoller {
 				session.updateNowPlaying(null);
 				session.setNowPlayingStatus(RadioSession.NowPlayingStatus.UNAUTHORIZED);
 				if (unauthorizedLogged.compareAndSet(false, true)) {
-					SavePointRadioMod.LOGGER.info("[radio] now-playing unauthorized (401) station={}"
+					SavePointRadioMod.LOGGER.info("[jukebox] now-playing unauthorized (401) station={}"
 							+ " - now-playing unavailable, using feed-state fallback", def.discId);
 				}
 			}
@@ -356,7 +356,7 @@ public final class NowPlayingPoller {
 			session.updateNowPlaying(new RadioSession.NowPlaying(live, source, title, artist, segmentName));
 		} catch (RuntimeException e) {
 			// Malformed/unexpected body: keep the prior snapshot, note it at debug.
-			SavePointRadioMod.LOGGER.debug("[radio] now-playing parse error", e);
+			SavePointRadioMod.LOGGER.debug("[jukebox] now-playing parse error", e);
 		}
 	}
 

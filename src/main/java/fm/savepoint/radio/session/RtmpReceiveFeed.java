@@ -131,7 +131,7 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	@Override
 	protected void onIdle(long backoffSeconds) {
 		connectionState = "waiting";
-		SavePointRadioMod.LOGGER.info("[radio] feed waiting station={} (rtmp listener :{})",
+		SavePointRadioMod.LOGGER.info("[jukebox] feed waiting station={} (rtmp listener :{})",
 				stationKeyValue(), rtmpPort);
 	}
 

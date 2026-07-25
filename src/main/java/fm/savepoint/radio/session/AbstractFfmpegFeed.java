@@ -164,7 +164,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	private final boolean tempoMatchEnabled;
 	/**
 	 * The live stretch factor ({@code output/input}) the occupancy servo last set,
-	 * published for {@code /radiodisc diag}. {@code 1.0} means no stretch. Written once
+	 * published for {@code /jukeboxdisc diag}. {@code 1.0} means no stretch. Written once
 	 * per servo update by the delivery thread; read on any thread.
 	 */
 	private volatile double currentStretchFactor = 1.0;
@@ -178,7 +178,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * Samples the WSOLA stage currently holds ahead of its analysis cursor - the DSP
 	 * ring depth that sits BEHIND the jitter buffer and adds a small fixed latency the
 	 * jitter-buffer {@code latencyMs} does not include. Published each PLAYING tick in
-	 * TEMPO_MATCH for the {@code /radiodisc diag} ({@code dspRingMs}); stays 0 in
+	 * TEMPO_MATCH for the {@code /jukeboxdisc diag} ({@code dspRingMs}); stays 0 in
 	 * REBUFFER. Delivery-thread write, any-thread read (diagnostic only).
 	 */
 	private volatile int stretchRingSamples;
@@ -323,7 +323,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 
 	/**
 	 * Small ring of recent buffered-frame occupancy (one sample/second) for the
-	 * {@code /radiodisc diag} min/max/avg note. Guarded by {@link #occupancyLock}.
+	 * {@code /jukeboxdisc diag} min/max/avg note. Guarded by {@link #occupancyLock}.
 	 */
 	private final int[] occupancySamples = new int[OCCUPANCY_WINDOW_SAMPLES];
 	private int occupancyCount;
@@ -531,7 +531,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * <p>Audit fix: previously each subclass had to remember to store
 	 * {@code endpoint.secret()} AND override {@code sanitize}. {@link HlsPullFeed} did;
 	 * {@link FileLoopFeed} and {@link LinkResolvedFeed} did not, so a FILE disc whose
-	 * URL carried a token printed it verbatim in {@code /radiodisc diag} (gated only at
+	 * URL carried a token printed it verbatim in {@code /jukeboxdisc diag} (gated only at
 	 * gamemaster level, BELOW the admin gate that protects the disc UI) and in the
 	 * reconnect WARN line. Registering by construction removes the chance to forget.</p>
 	 */
@@ -622,7 +622,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	/** Logs/records the idle state and sets {@link #connectionState}. */
 	protected void onIdle(long backoffSeconds) {
 		connectionState = "idle";
-		SavePointRadioMod.LOGGER.info("[radio] feed idle station={} retry={}s", stationKey, backoffSeconds);
+		SavePointRadioMod.LOGGER.info("[jukebox] feed idle station={} retry={}s", stationKey, backoffSeconds);
 	}
 
 	/**
@@ -724,18 +724,18 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		ExecutorService executor = FeedRegistry.get().feedExecutor();
 		if (executor == null) {
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] feed start refused station={} (feed executor unavailable, server stopping?)", stationKey);
+					"[jukebox] feed start refused station={} (feed executor unavailable, server stopping?)", stationKey);
 			return;
 		}
 		running = true;
 		startNanos = System.nanoTime();
-		SavePointRadioMod.LOGGER.info("[radio] feed start station={} ingest=ffmpeg {}", stationKey, startLogDetail());
+		SavePointRadioMod.LOGGER.info("[jukebox] feed start station={} ingest=ffmpeg {}", stationKey, startLogDetail());
 		try {
 			ingestTask = executor.submit(this::runIngestLoop);
 			deliveryTask = executor.submit(this::runDeliveryLoop);
 		} catch (RejectedExecutionException e) {
 			running = false;
-			SavePointRadioMod.LOGGER.warn("[radio] feed start rejected station={} (executor shut down)", stationKey);
+			SavePointRadioMod.LOGGER.warn("[jukebox] feed start rejected station={} (executor shut down)", stationKey);
 		}
 	}
 
@@ -756,7 +756,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		try {
 			onStop();
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.debug("[radio] feed onStop hook failed station={}: {}", stationKey, t.toString());
+			SavePointRadioMod.LOGGER.debug("[jukebox] feed onStop hook failed station={}: {}", stationKey, t.toString());
 		}
 		Future<?> ingest = ingestTask;
 		if (ingest != null) {
@@ -770,7 +770,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			buffer.clear();
 		}
 		sinks.clear();
-		SavePointRadioMod.LOGGER.info("[radio] feed stop station={} ingest=ffmpeg frames={} delivered={} "
+		SavePointRadioMod.LOGGER.info("[jukebox] feed stop station={} ingest=ffmpeg frames={} delivered={} "
 						+ "silence={} drops={} reconnects={} underruns={}",
 				stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
 				drops.get(), reconnects.get(), underruns.get());
@@ -866,7 +866,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	}
 
 	/**
-	 * A richer one-line snapshot for {@code /radiodisc diag} (sow-005 Phase 0):
+	 * A richer one-line snapshot for {@code /jukeboxdisc diag} (sow-005 Phase 0):
 	 * everything in {@link #getStatsLine()} plus the rolling dropped-FRAME count
 	 * ({@code dropsLast60s}, all causes, for drop/bandwidth accounting), the glitch
 	 * EVENT total and rolling glitch-EVENT rate ({@code glitchEvents} /
@@ -1080,7 +1080,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			if (stopAtEndOfInput() && firstFrameNanos >= 0) {
 				inputEnded = true;
 				connectionState = "ended";
-				SavePointRadioMod.LOGGER.info("[radio] feed end-of-input station={} (repeat off) - playing once, stopping",
+				SavePointRadioMod.LOGGER.info("[jukebox] feed end-of-input station={} (repeat off) - playing once, stopping",
 						stationKey);
 				break;
 			}
@@ -1115,7 +1115,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				onIdle(backoffSeconds);
 			} else {
 				connectionState = "waiting";
-				SavePointRadioMod.LOGGER.warn("[radio] feed reconnect station={} attempt={} reason={} lastStderr={}",
+				SavePointRadioMod.LOGGER.warn("[jukebox] feed reconnect station={} attempt={} reason={} lastStderr={}",
 						stationKey, attempt, reason, lastStderrLine());
 			}
 
@@ -1267,7 +1267,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		}
 		// Registry already shutting down - stderr must STILL be drained or the
 		// pipe fills and ffmpeg wedges until our destroy. Cheap daemon thread.
-		Thread thread = new Thread(drainer, "savepoint-radio-stderr-" + stationKey);
+		Thread thread = new Thread(drainer, "travelers-jukebox-stderr-" + stationKey);
 		thread.setDaemon(true);
 		thread.start();
 		return drain;
@@ -1546,7 +1546,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 						}
 						recordDrops(stretchTrim, DropCause.CATCH_UP);
 						SavePointRadioMod.LOGGER.error(
-								"[radio] time-stretch failed station={} - falling back to passthrough for this feed",
+								"[jukebox] time-stretch failed station={} - falling back to passthrough for this feed",
 								stationKey, t);
 					}
 				}
@@ -1630,7 +1630,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				reanchors.incrementAndGet();
 				recordGlitchEvent();
 				SavePointRadioMod.LOGGER.info(
-						"[radio] feed reanchor station={} buffered={} lowWaterFrames={} sustainFrames={} - "
+						"[jukebox] feed reanchor station={} buffered={} lowWaterFrames={} sustainFrames={} - "
 								+ "sustained drain; re-prerolling to rebuild target cushion",
 						stationKey, reanchorBuffered, reanchorLowWaterFrames, reanchorSustainFrames);
 			}
@@ -1654,13 +1654,13 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				try {
 					sink.accept(frame);
 				} catch (Throwable t) {
-					SavePointRadioMod.LOGGER.error("[radio] sink accept failed station={}", stationKey, t);
+					SavePointRadioMod.LOGGER.error("[jukebox] sink accept failed station={}", stationKey, t);
 				}
 			}
 
 			long now = System.nanoTime();
 			if (now - lastOccupancy >= 1_000_000_000L) {
-				// One buffered-occupancy sample per second for the /radiodisc diag
+				// One buffered-occupancy sample per second for the /jukeboxdisc diag
 				// min/max/avg note (a small ring; cheap).
 				long nanoDeltaMs = (now - lastOccupancy) / 1_000_000L;
 				lastOccupancy = now;
@@ -1681,7 +1681,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 					hostFreezeEvents.incrementAndGet();
 					hostFreezeMillis.addAndGet(freezeMs);
 					SavePointRadioMod.LOGGER.warn(
-							"[radio] host stall station={} froze~{}ms (monotonic clock paused vs wall clock: the OS/VM "
+							"[jukebox] host stall station={} froze~{}ms (monotonic clock paused vs wall clock: the OS/VM "
 									+ "suspended the process - NOT the mod). A client playout buffer shallower than "
 									+ "~{}ms will hitch here.",
 							stationKey, freezeMs, freezeMs);
@@ -1774,7 +1774,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 					buffered = buffer.size();
 				}
 				SavePointRadioMod.LOGGER.info(
-						"[radio] feed stats station={} frames={} delivered={} silence={} drops={} reconnects={} "
+						"[jukebox] feed stats station={} frames={} delivered={} silence={} drops={} reconnects={} "
 								+ "underruns={} buffered={} latencyMs={} targetMs={} hostFreezes={} hostFreezeMs={}",
 						stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
 						drops.get(), reconnects.get(), underruns.get(), buffered,
@@ -1791,9 +1791,9 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				lastStatsOverflowDrops = totalOverflowDrops;
 				if (overflowDelta > DROPS_WARN_PER_STATS_INTERVAL) {
 					SavePointRadioMod.LOGGER.warn(
-							"[radio] feed drops high station={} overflowLast30s={} maxBufferFrames={} - upstream "
+							"[jukebox] feed drops high station={} overflowLast30s={} maxBufferFrames={} - upstream "
 									+ "bursts exceed the jitter buffer's hard cap; raise 'maxBufferSeconds' in "
-									+ "savepoint_radio.json",
+									+ "travelers_jukebox.json",
 							stationKey, overflowDelta, maxBufferFrames);
 				}
 				checkIngestStall();
@@ -1895,7 +1895,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			return;
 		}
 		SavePointRadioMod.LOGGER.warn(
-				"[radio] feed ingest stalled station={} - no audio from ffmpeg for {}s while the process is still "
+				"[jukebox] feed ingest stalled station={} - no audio from ffmpeg for {}s while the process is still "
 						+ "alive; restarting the connection",
 				stationKey, TimeUnit.NANOSECONDS.toSeconds(stalledNanos));
 		lastIngestFrameNanos = 0L;

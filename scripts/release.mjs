@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SavePoint Radio release automation. Bumps the version + build number, builds the mod jar
+// Traveler's Jukebox release automation. Bumps the version + build number, builds the mod jar
 // LOCALLY (the fat jar bundles the ffmpeg/yt-dlp binaries from .product/, which CI cannot see),
 // tags + pushes, and publishes a GitHub Release with the jar attached.
 //
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const IS_WIN = process.platform === 'win32';
 const GRADLEW = IS_WIN ? path.join(ROOT, 'gradlew.bat') : path.join(ROOT, 'gradlew');
-const ARCHIVE_BASE = 'savepoint-radio';
+const ARCHIVE_BASE = 'travelers-jukebox';
 
 const C = { // tiny ANSI helpers; degrade to plain text where color is unwanted
   dim: (s) => `\x1b[2m${s}\x1b[0m`, bold: (s) => `\x1b[1m${s}\x1b[0m`,
@@ -196,7 +196,7 @@ async function main() {
   // Author identity comes from the repo config (gbtilabs); message carries no trailers.
   git('commit', '-m', `Release ${tag} (build ${newBuild})`);
   undo.push(() => gitOk('reset', '--hard', 'HEAD~1'));
-  git('tag', '-a', tag, '-m', `SavePoint Radio ${title}`);
+  git('tag', '-a', tag, '-m', `Traveler's Jukebox ${title}`);
   undo.push(() => gitOk('tag', '-d', tag));
   git('push', 'origin', branch);
   git('push', 'origin', tag);

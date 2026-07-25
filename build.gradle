@@ -10,7 +10,7 @@ version = "${project.mod_version}+build.${project.build_number}"
 group = project.maven_group
 
 base {
-	archivesName = 'savepoint-radio'
+	archivesName = 'travelers-jukebox'
 }
 
 repositories {
@@ -76,7 +76,7 @@ processResources {
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
 	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
-		into('savepoint_radio/bin/linux-amd64') {
+		into('travelers_jukebox/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
 			from(bundledYtdlp) { rename { 'yt-dlp' } }
 			// deno is the JS runtime yt-dlp needs for YouTube; optional (thin bundle omits it).
@@ -85,7 +85,7 @@ processResources {
 			}
 		}
 		if (bundledNotice.exists()) {
-			into('savepoint_radio') { from(bundledNotice) }
+			into('travelers_jukebox') { from(bundledNotice) }
 		}
 		doLast {
 			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +
@@ -162,10 +162,10 @@ tasks.register('deployMod') {
 
 		serverModsDir.mkdirs()
 
-		// Remove any previously deployed SavePoint Radio jars.
+		// Remove any previously deployed Traveler's Jukebox jars.
 		serverModsDir.listFiles()?.each { f ->
 			def n = f.name
-			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('savepoint_radio.*\\.jar')) {
+			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('travelers_jukebox.*\\.jar')) {
 				println "deployMod: deleting old ${f.name}"
 				f.delete()
 			}

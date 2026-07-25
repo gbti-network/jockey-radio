@@ -91,7 +91,7 @@ public final class FeedRegistry {
 		synchronized (lock) {
 			if (shutDown) {
 				SavePointRadioMod.LOGGER.warn(
-						"[radio] feed acquire during shutdown station={} - handing out unregistered stub feed",
+						"[jukebox] feed acquire during shutdown station={} - handing out unregistered stub feed",
 						source.stationKey());
 				return new StubStationFeed(source.stationKey());
 			}
@@ -108,10 +108,10 @@ public final class FeedRegistry {
 			try {
 				created.start();
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.error("[radio] feed failed to start station={}", created.stationKey(), t);
+				SavePointRadioMod.LOGGER.error("[jukebox] feed failed to start station={}", created.stationKey(), t);
 			}
 		}
-		SavePointRadioMod.LOGGER.info("[radio] feed acquire station={} refs={}", entry.feed.stationKey(), refs);
+		SavePointRadioMod.LOGGER.info("[jukebox] feed acquire station={} refs={}", entry.feed.stationKey(), refs);
 		return entry.feed;
 	}
 
@@ -128,11 +128,11 @@ public final class FeedRegistry {
 		synchronized (lock) {
 			Entry entry = feeds.get(key);
 			if (entry == null) {
-				SavePointRadioMod.LOGGER.warn("[radio] feed release for unknown station={} (ignored)", key);
+				SavePointRadioMod.LOGGER.warn("[jukebox] feed release for unknown station={} (ignored)", key);
 				return;
 			}
 			entry.refs--;
-			SavePointRadioMod.LOGGER.info("[radio] feed release station={} refs={}",
+			SavePointRadioMod.LOGGER.info("[jukebox] feed release station={} refs={}",
 					entry.feed.stationKey(), entry.refs);
 			if (entry.refs <= 0) {
 				feeds.remove(key);
@@ -143,7 +143,7 @@ public final class FeedRegistry {
 			try {
 				toStop.stop();
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.error("[radio] feed failed to stop station={}", toStop.stationKey(), t);
+				SavePointRadioMod.LOGGER.error("[jukebox] feed failed to stop station={}", toStop.stationKey(), t);
 			}
 		}
 	}
@@ -181,7 +181,7 @@ public final class FeedRegistry {
 		RadioConfig config = RadioConfig.get();
 		if ("stub".equals(config.ingest)) {
 			useFfmpeg = false;
-			SavePointRadioMod.LOGGER.info("[radio] ingest=stub (configured) - feeds will not fetch audio");
+			SavePointRadioMod.LOGGER.info("[jukebox] ingest=stub (configured) - feeds will not fetch audio");
 			return;
 		}
 		String binary = config.ffmpegBinary;
@@ -196,13 +196,13 @@ public final class FeedRegistry {
 		String failure = probeFfmpeg(binary);
 		if (failure == null) {
 			useFfmpeg = true;
-			SavePointRadioMod.LOGGER.info("[radio] ingest=ffmpeg binary={} verified", binary);
+			SavePointRadioMod.LOGGER.info("[jukebox] ingest=ffmpeg binary={} verified", binary);
 		} else {
 			useFfmpeg = false;
 			SavePointRadioMod.LOGGER.error(
-					"[radio] ffmpeg is not runnable ('{} -version' failed: {}) - falling back to stub feeds; "
+					"[jukebox] ffmpeg is not runnable ('{} -version' failed: {}) - falling back to stub feeds; "
 							+ "sessions still track but no audio will stream. Install ffmpeg or set "
-							+ "'ffmpegBinary' in savepoint_radio.json.",
+							+ "'ffmpegBinary' in travelers_jukebox.json.",
 					binary, failure);
 		}
 	}
@@ -233,7 +233,7 @@ public final class FeedRegistry {
 
 	/**
 	 * One {@link StationFeed#getStatsLine()} per live feed, for
-	 * {@code /radiodisc sessions}. The lines are built outside the registry
+	 * {@code /jukeboxdisc sessions}. The lines are built outside the registry
 	 * lock; safe on any thread.
 	 */
 	public List<String> feedStatsLines() {
@@ -252,7 +252,7 @@ public final class FeedRegistry {
 
 	/**
 	 * One {@link StationFeed#getDiagLine()} per live feed, for the sow-005
-	 * {@code /radiodisc diag} snapshot. Built outside the registry lock like
+	 * {@code /jukeboxdisc diag} snapshot. Built outside the registry lock like
 	 * {@link #feedStatsLines()}; safe on any thread.
 	 */
 	public List<String> feedDiagLines() {
@@ -278,7 +278,7 @@ public final class FeedRegistry {
 			if (feedExecutor == null && !shutDown) {
 				AtomicInteger index = new AtomicInteger();
 				ThreadFactory factory = runnable -> {
-					Thread thread = new Thread(runnable, "savepoint-radio-feed-" + index.getAndIncrement());
+					Thread thread = new Thread(runnable, "travelers-jukebox-feed-" + index.getAndIncrement());
 					thread.setDaemon(true);
 					return thread;
 				};
@@ -309,7 +309,7 @@ public final class FeedRegistry {
 			try {
 				feed.stop();
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.error("[radio] feed failed to stop station={} during shutdown",
+				SavePointRadioMod.LOGGER.error("[jukebox] feed failed to stop station={} during shutdown",
 						feed.stationKey(), t);
 			}
 		}
@@ -317,7 +317,7 @@ public final class FeedRegistry {
 			executor.shutdown();
 			try {
 				if (!executor.awaitTermination(timeout, unit)) {
-					SavePointRadioMod.LOGGER.warn("[radio] feed executor did not terminate within {} {}, forcing",
+					SavePointRadioMod.LOGGER.warn("[jukebox] feed executor did not terminate within {} {}, forcing",
 							timeout, unit);
 					executor.shutdownNow();
 				}
@@ -340,7 +340,7 @@ public final class FeedRegistry {
 		synchronized (lock) {
 			shutDown = false;
 			if (!feeds.isEmpty()) {
-				SavePointRadioMod.LOGGER.warn("[radio] feed registry reset with {} stale feed(s) still registered",
+				SavePointRadioMod.LOGGER.warn("[jukebox] feed registry reset with {} stale feed(s) still registered",
 						feeds.size());
 			}
 		}

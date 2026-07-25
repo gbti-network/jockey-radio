@@ -34,7 +34,7 @@ public final class SavePointVoicechatPlugin implements VoicechatPlugin {
 
 	@Override
 	public void initialize(VoicechatApi api) {
-		SavePointRadioMod.LOGGER.info("[radio] voicechat plugin initialized id={}", SavePointRadioMod.MOD_ID);
+		SavePointRadioMod.LOGGER.info("[jukebox] voicechat plugin initialized id={}", SavePointRadioMod.MOD_ID);
 	}
 
 	@Override
@@ -47,7 +47,7 @@ public final class SavePointVoicechatPlugin implements VoicechatPlugin {
 		VoicechatServerApi api = event.getVoicechat();
 		boolean categoryOk = registerCategory(api);
 		VoiceChatBackend.setServerApi(api, categoryOk);
-		SavePointRadioMod.LOGGER.info("[radio] voicechat server api ready category={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] voicechat server api ready category={}",
 				categoryOk ? VoiceChatBackend.CATEGORY_ID : "unregistered");
 		// Sessions resumed during world load are running on null sinks; hop to
 		// the server thread (the event's thread is SVC's business) and upgrade.
@@ -59,11 +59,11 @@ public final class SavePointVoicechatPlugin implements VoicechatPlugin {
 
 	private void onServerStopped(VoicechatServerStoppedEvent event) {
 		VoiceChatBackend.clear();
-		SavePointRadioMod.LOGGER.info("[radio] voicechat server api stopped");
+		SavePointRadioMod.LOGGER.info("[jukebox] voicechat server api stopped");
 	}
 
 	/**
-	 * Registers the "SavePoint Radio" volume category so clients get a
+	 * Registers the "Traveler's Jukebox" volume category so clients get a
 	 * dedicated volume slider for radio audio. No icon (SVC renders a default).
 	 * Failure is non-fatal: sinks simply skip {@code setCategory}.
 	 */
@@ -71,13 +71,13 @@ public final class SavePointVoicechatPlugin implements VoicechatPlugin {
 		try {
 			VolumeCategory category = api.volumeCategoryBuilder()
 					.setId(VoiceChatBackend.CATEGORY_ID)
-					.setName("SavePoint Radio")
+					.setName("Traveler's Jukebox")
 					.setDescription("Streaming radio jukebox discs")
 					.build();
 			api.registerVolumeCategory(category);
 			return true;
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] voicechat volume category registration failed", t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] voicechat volume category registration failed", t);
 			return false;
 		}
 	}

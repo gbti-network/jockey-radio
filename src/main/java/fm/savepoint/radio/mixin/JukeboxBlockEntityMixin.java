@@ -48,62 +48,62 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class JukeboxBlockEntityMixin {
 
 	@Inject(method = "setTheItem", at = @At("TAIL"))
-	private void savepoint_radio$afterSetTheItem(ItemStack stack, CallbackInfo ci) {
+	private void travelers_jukebox$afterSetTheItem(ItemStack stack, CallbackInfo ci) {
 		try {
 			JukeboxBlockEntity self = (JukeboxBlockEntity) (Object) this;
 			if (self.getLevel() instanceof ServerLevel level) {
 				RadioManager.get().onJukeboxItemChanged(level, self.getBlockPos(), self.getTheItem());
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] setTheItem hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] setTheItem hook failed", t);
 		}
 	}
 
 	@Inject(method = "setSongItemWithoutPlaying", at = @At("TAIL"))
-	private void savepoint_radio$afterSetSongItemWithoutPlaying(ItemStack stack, CallbackInfo ci) {
+	private void travelers_jukebox$afterSetSongItemWithoutPlaying(ItemStack stack, CallbackInfo ci) {
 		try {
 			JukeboxBlockEntity self = (JukeboxBlockEntity) (Object) this;
 			if (self.getLevel() instanceof ServerLevel level) {
 				RadioManager.get().onJukeboxItemChanged(level, self.getBlockPos(), self.getTheItem());
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] setSongItemWithoutPlaying hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] setSongItemWithoutPlaying hook failed", t);
 		}
 	}
 
 	@Inject(method = "loadAdditional", at = @At("TAIL"))
-	private void savepoint_radio$afterLoadAdditional(ValueInput input, CallbackInfo ci) {
+	private void travelers_jukebox$afterLoadAdditional(ValueInput input, CallbackInfo ci) {
 		try {
 			JukeboxBlockEntity self = (JukeboxBlockEntity) (Object) this;
 			if (self.getLevel() instanceof ServerLevel level) {
 				RadioManager.get().onJukeboxItemChanged(level, self.getBlockPos(), self.getTheItem());
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] loadAdditional hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] loadAdditional hook failed", t);
 		}
 	}
 
 	@Inject(method = "preRemoveSideEffects", at = @At("HEAD"))
-	private void savepoint_radio$beforeRemoveSideEffects(BlockPos pos, BlockState state, CallbackInfo ci) {
+	private void travelers_jukebox$beforeRemoveSideEffects(BlockPos pos, BlockState state, CallbackInfo ci) {
 		try {
 			JukeboxBlockEntity self = (JukeboxBlockEntity) (Object) this;
 			if (self.getLevel() instanceof ServerLevel level) {
 				RadioManager.get().onJukeboxRemoved(level, pos);
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] preRemoveSideEffects hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] preRemoveSideEffects hook failed", t);
 		}
 	}
 
 	@Inject(method = "setRemoved", at = @At("HEAD"))
-	private void savepoint_radio$onSetRemoved(CallbackInfo ci) {
+	private void travelers_jukebox$onSetRemoved(CallbackInfo ci) {
 		try {
 			JukeboxBlockEntity self = (JukeboxBlockEntity) (Object) this;
 			if (self.getLevel() instanceof ServerLevel level) {
 				RadioManager.get().onJukeboxSetRemoved(level, self.getBlockPos());
 			}
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.error("[radio] setRemoved hook failed", t);
+			SavePointRadioMod.LOGGER.error("[jukebox] setRemoved hook failed", t);
 		}
 	}
 }

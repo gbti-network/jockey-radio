@@ -61,7 +61,7 @@ final class MonitorSink implements MonitorChannel {
 
 	@Override
 	public void open() {
-		SavePointRadioMod.LOGGER.info("[radio] monitor sink open station={}", discLabel);
+		SavePointRadioMod.LOGGER.info("[jukebox] monitor sink open station={}", discLabel);
 	}
 
 	@Override
@@ -148,7 +148,7 @@ final class MonitorSink implements MonitorChannel {
 					encoder.close();
 				}
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.warn("[radio] monitor encoder close failed station={}", discLabel, t);
+				SavePointRadioMod.LOGGER.warn("[jukebox] monitor encoder close failed station={}", discLabel, t);
 			}
 		}
 		// flush() signals end-of-stream to the client jitter buffer; a racing
@@ -156,9 +156,9 @@ final class MonitorSink implements MonitorChannel {
 		try {
 			channel.flush();
 		} catch (Throwable t) {
-			SavePointRadioMod.LOGGER.warn("[radio] monitor channel flush failed station={}", discLabel, t);
+			SavePointRadioMod.LOGGER.warn("[jukebox] monitor channel flush failed station={}", discLabel, t);
 		}
-		SavePointRadioMod.LOGGER.info("[radio] monitor sink close station={} framesSent={}",
+		SavePointRadioMod.LOGGER.info("[jukebox] monitor sink close station={} framesSent={}",
 				discLabel, framesSent.get());
 	}
 
@@ -167,7 +167,7 @@ final class MonitorSink implements MonitorChannel {
 		if (!sendFailureLogged) {
 			sendFailureLogged = true;
 			SavePointRadioMod.LOGGER.warn(
-					"[radio] monitor sink send failed station={} (suppressing further send errors)", discLabel, t);
+					"[jukebox] monitor sink send failed station={} (suppressing further send errors)", discLabel, t);
 		}
 	}
 }

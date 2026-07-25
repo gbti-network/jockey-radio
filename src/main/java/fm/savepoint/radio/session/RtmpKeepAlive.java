@@ -109,9 +109,9 @@ public final class RtmpKeepAlive {
 						MonitorService.get().stopForDisc(key.substring("disc:".length()));
 					}
 					FeedRegistry.get().release(key);
-					SavePointRadioMod.LOGGER.info("[radio] rtmp keep-alive released station={}", key);
+					SavePointRadioMod.LOGGER.info("[jukebox] rtmp keep-alive released station={}", key);
 				} catch (Throwable t) {
-					SavePointRadioMod.LOGGER.error("[radio] rtmp keep-alive release failed station={}", key, t);
+					SavePointRadioMod.LOGGER.error("[jukebox] rtmp keep-alive release failed station={}", key, t);
 				}
 			}
 		}
@@ -127,11 +127,11 @@ public final class RtmpKeepAlive {
 				FeedRegistry.get().acquire(RadioManager.discFeedSource(def.discId, def));
 				anchored.put(key, def);
 				SavePointRadioMod.LOGGER.info(
-						"[radio] rtmp keep-alive anchored station={} port={} - listener held 24/7",
+						"[jukebox] rtmp keep-alive anchored station={} port={} - listener held 24/7",
 						key, def.rtmpPort);
 			} catch (Throwable t) {
 				// Never block server start on a bad disc; it just won't be kept alive.
-				SavePointRadioMod.LOGGER.error("[radio] rtmp keep-alive acquire failed station={}", key, t);
+				SavePointRadioMod.LOGGER.error("[jukebox] rtmp keep-alive acquire failed station={}", key, t);
 			}
 		}
 	}
@@ -157,10 +157,10 @@ public final class RtmpKeepAlive {
 			try {
 				FeedRegistry.get().release(key);
 			} catch (Throwable t) {
-				SavePointRadioMod.LOGGER.error("[radio] rtmp keep-alive release failed on shutdown station={}", key, t);
+				SavePointRadioMod.LOGGER.error("[jukebox] rtmp keep-alive release failed on shutdown station={}", key, t);
 			}
 		}
-		SavePointRadioMod.LOGGER.info("[radio] rtmp keep-alive released {} anchor(s) on shutdown", anchored.size());
+		SavePointRadioMod.LOGGER.info("[jukebox] rtmp keep-alive released {} anchor(s) on shutdown", anchored.size());
 		anchored.clear();
 	}
 }

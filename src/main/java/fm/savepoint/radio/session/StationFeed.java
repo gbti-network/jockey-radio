@@ -29,13 +29,13 @@ public interface StationFeed {
 	void removeSink(AudioSink sink);
 
 	/**
-	 * One-line stats/diagnostics summary for {@code /radiodisc sessions}.
+	 * One-line stats/diagnostics summary for {@code /jukeboxdisc sessions}.
 	 * Must be safe to call from any thread.
 	 */
 	String getStatsLine();
 
 	/**
-	 * A richer multi-field diagnostics line for {@code /radiodisc diag} (sow-005
+	 * A richer multi-field diagnostics line for {@code /jukeboxdisc diag} (sow-005
 	 * Phase 0): the rolling micro-glitch rate, effective bitrate, buffer-occupancy
 	 * summary and redacted ffmpeg arg-shape. Defaults to {@link #getStatsLine()}
 	 * so feeds without extra instrumentation (the stub) still print something.
