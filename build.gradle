@@ -74,7 +74,9 @@ processResources {
 	def bundledYtdlp = file("${productDir}/yt-dlp-linux")
 	def bundledDeno = file("${productDir}/deno")
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
+	def bundledLicenses = file("${productDir}/licenses")
 	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno)
+	inputs.dir(bundledLicenses)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
 		into('jockey_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
@@ -86,6 +88,10 @@ processResources {
 		}
 		if (bundledNotice.exists()) {
 			into('jockey_radio') { from(bundledNotice) }
+		}
+		// Full license texts for the bundled binaries + Concentus (LGPL/GPL/MIT/Unlicense/BSD).
+		if (bundledLicenses.exists()) {
+			into('jockey_radio/licenses') { from(bundledLicenses) }
 		}
 		doLast {
 			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +

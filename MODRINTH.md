@@ -53,7 +53,7 @@ mirror it in the Modrinth form:
 | Dependency          | Type      |
 | ------------------- | --------- |
 | Fabric API          | required  |
-| Simple Voice Chat   | optional  |
+| Simple Voice Chat   | required  |
 
 (ffmpeg/yt-dlp are **bundled** on linux/amd64, so they are not Modrinth dependencies. Note
 the bundling and the host fallback in the description.)
@@ -87,5 +87,5 @@ mark) as the Modrinth project icon.
 - [ ] `assets/jockey_radio/icon.png` exists and the `icon` field resolves.
 - [ ] jar `fabric.mod.json` reads `id: jockey_radio`, `name: Jockey Radio`, `authors: [GBTI]`.
 - [ ] No secrets (tokens, stream keys) appear in the jar, README, or listing.
-- [ ] Modrinth version declares Fabric API (required) and Simple Voice Chat (optional).
+- [ ] Modrinth version declares Fabric API (required) and Simple Voice Chat (required).
 - [ ] README / listing carry no stale "SavePoint Radio" or "Traveler's Jukebox" identity.

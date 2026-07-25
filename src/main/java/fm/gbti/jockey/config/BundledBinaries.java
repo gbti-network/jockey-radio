@@ -158,11 +158,11 @@ public final class BundledBinaries {
 	/** Sets the owner execute bit, POSIX first, falling back to the portable File API. */
 	private static void markExecutable(Path p) {
 		try {
+			// Owner-only (0700): the server process is the only thing that runs these; there is no
+			// reason to grant group/other read or execute on attacker-reachable extracted binaries.
 			Set<PosixFilePermission> perms = EnumSet.of(
 					PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
-					PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_READ,
-					PosixFilePermission.GROUP_EXECUTE, PosixFilePermission.OTHERS_READ,
-					PosixFilePermission.OTHERS_EXECUTE);
+					PosixFilePermission.OWNER_EXECUTE);
 			Files.setPosixFilePermissions(p, perms);
 		} catch (Exception notPosix) {
 			File f = p.toFile();

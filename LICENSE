@@ -29,5 +29,5 @@ Third-party notes: this mod compiles against the Simple Voice Chat plugin API
 (de.maxhenkel.voicechat:voicechat-api) as a compile-only dependency; none of that
 API's code is bundled in the released jar. The release jar additionally bundles the
 ffmpeg (LGPL), yt-dlp (Unlicense), and deno (MIT) executables, which it runs as
-separate processes; see .product/THIRD-PARTY-NOTICES.txt and docs/HOSTING.md
+separate processes; see .product/THIRD-PARTY-NOTICES.txt and THIRD-PARTY-NOTICES.txt
 ("Dependency licensing").
