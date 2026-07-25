@@ -1,6 +1,6 @@
 {
   "name": "minecraft-jockey-radio",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Dev shortcuts for the Jockey Radio Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
   "scripts": {
