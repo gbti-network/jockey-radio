@@ -69,10 +69,13 @@ public final class SavePointVoicechatPlugin implements VoicechatPlugin {
 	 */
 	private static boolean registerCategory(VoicechatServerApi api) {
 		try {
+			// SVC caps BOTH the category name and description at 16 chars (the AddCategoryPacket
+			// sent to a joining client fails to encode otherwise - "Traveler's Jukebox" is 18 and
+			// dropped every client's connection). Keep both <=16; the full brand lives in the mod name.
 			VolumeCategory category = api.volumeCategoryBuilder()
 					.setId(VoiceChatBackend.CATEGORY_ID)
-					.setName("Traveler's Jukebox")
-					.setDescription("Streaming radio jukebox discs")
+					.setName("Jukebox")
+					.setDescription("Live radio")
 					.build();
 			api.registerVolumeCategory(category);
 			return true;
