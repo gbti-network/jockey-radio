@@ -165,7 +165,7 @@ tasks.register('deployMod') {
 		// Remove any previously deployed Traveler's Jukebox jars.
 		serverModsDir.listFiles()?.each { f ->
 			def n = f.name
-			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('travelers_jukebox.*\\.jar')) {
+			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('travelers[-_]jukebox.*\\.jar')) {
 				println "deployMod: deleting old ${f.name}"
 				f.delete()
 			}

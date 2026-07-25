@@ -31,8 +31,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class VoiceChatBackend {
 
-	/** Volume category id channels are tagged with (client-side volume slider). */
-	static final String CATEGORY_ID = "travelers_jukebox";
+	/**
+	 * Volume category id channels are tagged with (client-side volume slider). SVC caps this at
+	 * 16 chars, a-z and _ only - so it is NOT the 17-char mod id "travelers_jukebox". The
+	 * player-facing label is set separately via {@code setName("Traveler's Jukebox")}.
+	 */
+	static final String CATEGORY_ID = "gbti_jukebox";
 
 	private static volatile VoicechatServerApi serverApi;
 	private static volatile boolean categoryRegistered;
