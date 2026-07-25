@@ -1,30 +1,30 @@
 {
 	"schemaVersion": 1,
-	"id": "travelers_jukebox",
+	"id": "jockey_radio",
 	"version": "${version}",
-	"name": "Traveler's Jukebox",
+	"name": "Jockey Radio",
 	"description": "Turn any Minecraft jukebox into a live broadcasting endpoint. Play internet radio, livestreams, SoundCloud/Mixcloud, direct audio URLs, and uploaded files through music discs as positional Simple Voice Chat audio. Server-side; with native SavePoint broadcasting integration.",
 	"authors": [
-		"GBTI Network"
+		"GBTI"
 	],
 	"contact": {
-		"homepage": "https://jukebox.fm",
-		"sources": "https://github.com/gbti-network/minecraft-mod-travelers-jukebox",
-		"issues": "https://github.com/gbti-network/minecraft-mod-travelers-jukebox/issues"
+		"homepage": "https://github.com/gbti-network/jockey-radio",
+		"sources": "https://github.com/gbti-network/jockey-radio",
+		"issues": "https://github.com/gbti-network/jockey-radio/issues"
 	},
 	"license": "ARR",
-	"icon": "assets/travelers_jukebox/icon.png",
+	"icon": "assets/jockey_radio/icon.png",
 	"environment": "server",
 	"entrypoints": {
 		"main": [
-			"fm.savepoint.radio.SavePointRadioMod"
+			"fm.gbti.jockey.JockeyRadioMod"
 		],
 		"voicechat": [
-			"fm.savepoint.radio.voicechat.SavePointVoicechatPlugin"
+			"fm.gbti.jockey.voicechat.JockeyRadioVoicechatPlugin"
 		]
 	},
 	"mixins": [
-		"travelers_jukebox.mixins.json"
+		"jockey_radio.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.3",

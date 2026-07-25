@@ -1,0 +1,56 @@
+{
+	"jockey_radio.menu.title": "Jockey Radio",
+	"jockey_radio.menu.body": "Admin console - create and manage streaming radio discs.",
+	"jockey_radio.menu.create_pull": "Stream from a URL",
+	"jockey_radio.menu.create_rtmp": "Create Receive RTMP disc",
+	"jockey_radio.menu.manage": "Manage discs",
+	"jockey_radio.menu.give": "Give disc",
+	"jockey_radio.menu.reload": "Reload registry",
+
+	"jockey_radio.input.disc_id": "Disc ID (a-z0-9_-, 1..32)",
+	"jockey_radio.input.name": "Display name",
+	"jockey_radio.input.name_color": "Name color",
+	"jockey_radio.input.base_disc": "Base disc item",
+	"jockey_radio.input.host": "Host (host or host:port)",
+	"jockey_radio.input.station_id": "Station ID (digits)",
+	"jockey_radio.input.token_optional": "Access token (optional)",
+	"jockey_radio.input.token_keep": "Access token (blank keeps current)",
+	"jockey_radio.input.rtmp_port": "RTMP port (1024..65535)",
+	"jockey_radio.input.stream_key": "Stream key",
+	"jockey_radio.input.stream_key_keep": "Stream key (blank keeps current)",
+	"jockey_radio.input.rtmp_bind": "RTMP bind",
+	"jockey_radio.input.now_playing_url": "Now Playing URL (optional)",
+
+	"jockey_radio.button.save": "Save disc",
+	"jockey_radio.button.back": "Back",
+	"jockey_radio.button.back_to_form": "Back to form",
+	"jockey_radio.button.ok": "OK",
+	"jockey_radio.button.cancel": "Cancel",
+	"jockey_radio.button.delete": "Delete",
+	"jockey_radio.button.delete_id": "Delete %s",
+	"jockey_radio.button.edit": "Edit %s",
+	"jockey_radio.button.test": "Test %s",
+	"jockey_radio.button.create_pull": "Stream from a URL",
+	"jockey_radio.button.create_rtmp": "Create RTMP",
+	"jockey_radio.button.give_to_me": "Give to me",
+
+	"jockey_radio.form.pull.title_create": "New stream disc",
+	"jockey_radio.form.pull.title_edit": "Edit stream disc",
+	"jockey_radio.form.pull.body_create": "New stream disc - plays a SavePoint station or any HLS stream.",
+	"jockey_radio.form.pull.body_edit": "Editing '%s' - streams from a URL.",
+
+	"jockey_radio.form.rtmp.title_create": "Create RTMP disc",
+	"jockey_radio.form.rtmp.title_edit": "Edit RTMP disc",
+	"jockey_radio.form.rtmp.body_create": "New RTMP receive disc - a DJ/OBS/relay publishes into the server.",
+	"jockey_radio.form.rtmp.body_edit": "Editing '%s' - RTMP receive source.",
+
+	"jockey_radio.manage.title": "Manage discs",
+	"jockey_radio.manage.empty": "No discs yet - use Create to add one.",
+
+	"jockey_radio.give.title": "Give disc",
+	"jockey_radio.give.body": "Give a radio disc to yourself.",
+	"jockey_radio.give.empty": "No discs to give yet - create one first.",
+	"jockey_radio.give.choice": "Disc",
+
+	"jockey_radio.delete.title": "Delete disc?"
+}

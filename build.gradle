@@ -10,7 +10,7 @@ version = "${project.mod_version}+build.${project.build_number}"
 group = project.maven_group
 
 base {
-	archivesName = 'travelers-jukebox'
+	archivesName = 'jockey-radio'
 }
 
 repositories {
@@ -76,7 +76,7 @@ processResources {
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
 	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
-		into('travelers_jukebox/bin/linux-amd64') {
+		into('jockey_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
 			from(bundledYtdlp) { rename { 'yt-dlp' } }
 			// deno is the JS runtime yt-dlp needs for YouTube; optional (thin bundle omits it).
@@ -85,7 +85,7 @@ processResources {
 			}
 		}
 		if (bundledNotice.exists()) {
-			into('travelers_jukebox') { from(bundledNotice) }
+			into('jockey_radio') { from(bundledNotice) }
 		}
 		doLast {
 			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +
@@ -123,15 +123,15 @@ tasks.named('test', Test) {
 //   ./gradlew connectorCheck                       # uses yt-dlp from PATH
 //   ./gradlew connectorCheck -Pytdlp=/path/to/yt-dlp
 tasks.register('connectorCheck', Test) {
-	group = 'savepoint'
+	group = 'jockey'
 	description = 'Live check that every platform connector still resolves (network + yt-dlp required).'
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
 	useJUnitPlatform {
 		includeTags 'connector'
 	}
-	systemProperty 'savepoint.connector.enabled', 'true'
-	systemProperty 'savepoint.ytdlp', (project.findProperty('ytdlp') ?: 'yt-dlp').toString()
+	systemProperty 'jockey.connector.enabled', 'true'
+	systemProperty 'jockey.ytdlp', (project.findProperty('ytdlp') ?: 'yt-dlp').toString()
 	outputs.upToDateWhen { false }
 	testLogging {
 		events 'passed', 'failed', 'skipped'
@@ -152,7 +152,7 @@ def outputJarTaskName = tasks.findByName('remapJar') != null ? 'remapJar' : 'jar
 
 tasks.register('deployMod') {
 	dependsOn tasks.named(outputJarTaskName)
-	group = 'savepoint'
+	group = 'jockey'
 	description = 'Builds the mod and copies the finished jar into .server/mods, replacing any older copies.'
 
 	def serverModsDir = file('.server/mods')
@@ -162,10 +162,10 @@ tasks.register('deployMod') {
 
 		serverModsDir.mkdirs()
 
-		// Remove any previously deployed Traveler's Jukebox jars.
+		// Remove any previously deployed Jockey Radio jars.
 		serverModsDir.listFiles()?.each { f ->
 			def n = f.name
-			if (n.matches('savepoint.*-?radio.*\\.jar') || n.matches('travelers[-_]jukebox.*\\.jar')) {
+			if (n.matches('jockey[-_]radio.*\\.jar') || n.matches('savepoint.*-?radio.*\\.jar') || n.matches('travelers[-_]jukebox.*\\.jar')) {
 				println "deployMod: deleting old ${f.name}"
 				f.delete()
 			}

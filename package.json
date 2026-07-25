@@ -1,8 +1,8 @@
 {
-  "name": "minecraft-travelers-jukebox",
+  "name": "minecraft-jockey-radio",
   "version": "0.1.0",
   "private": true,
-  "description": "Dev shortcuts for the Traveler's Jukebox Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
+  "description": "Dev shortcuts for the Jockey Radio Fabric mod workspace (wraps the Python dev-server panel in tools/server-panel)",
   "scripts": {
     "release": "node scripts/release.mjs",
     "release:minor": "node scripts/release.mjs minor",

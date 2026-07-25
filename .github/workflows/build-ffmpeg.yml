@@ -1,6 +1,6 @@
 name: Build slim ffmpeg (linux-amd64, LGPL)
 
-# Produces the ffmpeg binary SavePoint Radio bundles for managed hosting.
+# Produces the ffmpeg binary Jockey Radio bundles for managed hosting.
 #
 # Why this exists: managed Minecraft hosts (Modrinth Servers, Aternos, BisectHosting …) give the
 # operator a file-upload panel and NO shell, so the mod must ship its own ffmpeg. A general-purpose

@@ -1,14 +1,14 @@
-Traveler's Jukebox
-Copyright (c) 2026 GBTI Network. All Rights Reserved.
+Jockey Radio
+Copyright (c) 2026 GBTI. All Rights Reserved.
 
 This software and its source code (the "Software") are the exclusive property of
-GBTI Network. The Software is a standalone Minecraft (Fabric) server mod; it
+GBTI. The Software is a standalone Minecraft (Fabric) server mod; it
 optionally integrates with the SavePoint broadcasting service but does not
 require it.
 
 No permission is granted to copy, modify, merge, publish, distribute, sublicense,
 or sell copies of the Software, in source or binary form, without the prior
-written permission of GBTI Network, except that the Software may be downloaded
+written permission of GBTI, except that the Software may be downloaded
 and installed by end users solely to run it as a Minecraft (Fabric) server mod.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -20,7 +20,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----------------------------------------------------------------------------------
 NOTE (owner decision, not part of the license grant): the fabric.mod.json "license"
-field is set to "ARR" (All Rights Reserved) to match this notice. If GBTI Network
+field is set to "ARR" (All Rights Reserved) to match this notice. If GBTI
 prefers to publish under a permissive open-source license instead, replace the text
 above with the standard MIT License text and change the fabric.mod.json "license"
 field from "ARR" to "MIT".

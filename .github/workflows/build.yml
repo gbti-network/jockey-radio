@@ -41,6 +41,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: savepoint-radio-jar
+          name: jockey-radio-jar
           path: build/libs/*.jar
           if-no-files-found: error

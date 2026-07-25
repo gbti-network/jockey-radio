@@ -1,4 +1,4 @@
-"""SavePoint Radio - local dev server panel (sow-003).
+"""Jockey Radio - local dev server panel (sow-003).
 
 Single-file, stdlib-only web panel that manages a Minecraft Fabric dedicated
 server living in <repo>/.server. Originates from the sow-003 Scope of Work:
@@ -645,7 +645,7 @@ PAGE_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SavePoint Radio - Dev Server Panel</title>
+<title>Jockey Radio - Dev Server Panel</title>
 <style>
   :root { color-scheme: dark; }
   body { background:#0f1216; color:#d7dde4; margin:0; padding:2rem 1rem;
@@ -676,7 +676,7 @@ PAGE_HTML = """<!doctype html>
 </head>
 <body>
 <main>
-  <h1>SavePoint Radio - Dev Server Panel</h1>
+  <h1>Jockey Radio - Dev Server Panel</h1>
   <p>
     <span id="badge" class="badge stopped">stopped</span>
     <span id="meta" class="meta"></span>
@@ -919,7 +919,7 @@ def run_panel() -> None:
             f"it is stopped (kill {orphan}) or the stale file is removed",
             file=sys.stderr,
         )
-    print(f"SavePoint Radio dev server panel: http://127.0.0.1:{port}")
+    print(f"Jockey Radio dev server panel: http://127.0.0.1:{port}")
     try:
         httpd.serve_forever()
     finally:

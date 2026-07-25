@@ -11,17 +11,13 @@
 build/
 .gradle/
 
-# .docs/ mixes OUR authored documentation with a large offline reference dump that
-# must NEVER be committed or redistributed:
+# .docs/ is local-only working documentation and offline reference material; it is NOT
+# published in the repo. It also holds large dumps that must never be committed:
 #   minecraft-26.2-sources/  - decompiled Minecraft (PROPRIETARY, ~62 MB)
 #   fabric-docs/             - shallow clone of FabricMC/fabric-docs (~197 MB)
 #   fabric-api-*-javadoc/    - extracted Fabric API javadoc (~22 MB)
-# So ignore .docs/ by default and allow-list only our own files back in.
-.docs/*
-!.docs/README.md
-!.docs/*.html
-!.docs/*.css
-!.docs/assets/
+# The technical docs (HOSTING.md etc.) live here too and stay off the public repo.
+.docs/
 
 # Local Claude Code config / project instructions (kept out of version control).
 .claude/

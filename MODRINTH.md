@@ -1,8 +1,8 @@
-# Publishing SavePoint Radio
+# Publishing Jockey Radio
 
 Release checklist for a Modrinth / Fabric distribution. **This document does not publish
-anything — it records the steps.** Do not upload until the owner signs off on the open
-decisions below.
+anything - it records the steps.** The listing copy, headings, and gallery plan live in
+`.data/ops/branding-ops/branding-ops.md` (local, off-repo).
 
 ---
 
@@ -14,16 +14,19 @@ export PATH=$JAVA_HOME/bin:$PATH
 ./gradlew clean build
 ```
 
-The distributable jar is the remapped output in **`build/libs/`**:
+The distributable jar is in **`build/libs/`**:
 
-- `savepoint-radio-<version>.jar` — the mod (upload this)
-- `savepoint-radio-<version>-sources.jar` — sources (optional additional file)
+- `jockey-radio-<version>.jar` - the mod (upload this)
+- `jockey-radio-<version>-sources.jar` - sources (optional additional file)
 
-`<version>` comes from `mod_version` in `gradle.properties` (currently `0.1.0`).
+`<version>` comes from `mod_version` in `gradle.properties` (currently `0.1.0`); the full
+jar name is `mod_version+build.<n>` where `npm run release` bumps the build number.
 
 > On this unobfuscated 26.2 toolchain there is no `remapJar` task, so `build` produces the
 > final jar directly via `jar`. The `LICENSE` file at the repo root is bundled into the jar
-> by `build.gradle` (`jar { from('LICENSE') }`).
+> by `build.gradle`. On linux/amd64 the jar also bundles ffmpeg/yt-dlp/deno (from `.product/`)
+> for a zero-install drop-in; a build without those present is a THIN jar (falls back to a
+> configured/PATH ffmpeg).
 
 ---
 
@@ -32,62 +35,57 @@ The distributable jar is the remapped output in **`build/libs/`**:
 Metadata comes from `src/main/resources/fabric.mod.json` (the build expands `${version}`);
 mirror it in the Modrinth form:
 
-| Modrinth field        | Value / source                                                            |
-| --------------------- | ------------------------------------------------------------------------- |
-| Name                  | SavePoint Radio                                                           |
-| Summary               | `description` in fabric.mod.json                                          |
-| Environment           | Server: **required** · Client: **optional** (`environment: "*"`, ducking) |
-| Loaders               | Fabric                                                                    |
-| Game versions         | `26.2` — confirm the exact Modrinth game-version label at publish time     |
-| Version number        | `mod_version` (e.g. `0.1.0`)                                              |
-| Channel               | Release / Beta as appropriate                                            |
-| License               | ARR (or MIT — see decision below)                                        |
-| Links                 | `contact.homepage` / `sources` / `issues` (see placeholder note)         |
+| Modrinth field  | Value / source                                                            |
+| --------------- | ------------------------------------------------------------------------- |
+| Name            | **Jockey Radio: Live Radio & Custom Music Discs** (title per branding-ops) |
+| Summary         | `description` in fabric.mod.json                                          |
+| Publisher       | GBTI                                                                       |
+| Environment     | Server: **required** · Client: **optional** (`environment: "server"`, ducking) |
+| Loaders         | Fabric                                                                    |
+| Game versions   | `26.2` - confirm the exact Modrinth game-version label at publish time    |
+| Version number  | `mod_version` (e.g. `0.1.0`)                                              |
+| Channel         | Release / Beta as appropriate                                            |
+| License         | ARR                                                                       |
+| Links           | `contact.homepage` / `sources` / `issues` (github.com/gbti-network/jockey-radio) |
 
 **Dependencies to declare on the Modrinth version:**
 
-| Dependency                              | Type      |
-| --------------------------------------- | --------- |
-| Fabric API                              | required  |
-| Simple Voice Chat                       | optional  |
+| Dependency          | Type      |
+| ------------------- | --------- |
+| Fabric API          | required  |
+| Simple Voice Chat   | optional  |
 
-(ffmpeg is a **host** requirement, not a Modrinth dependency — call it out in the
-description/body, not the dependency list.)
+(ffmpeg/yt-dlp are **bundled** on linux/amd64, so they are not Modrinth dependencies. Note
+the bundling and the host fallback in the description.)
 
-**Body:** reuse the [README](README.md). **Do not** include any stream keys, access
-tokens, now-playing tokens, or the dev stream key anywhere in the listing.
+**Body:** reuse the [README](README.md), with the gallery/headings from branding-ops.
+**Do not** include any stream keys, access tokens, or now-playing tokens anywhere in the
+listing.
+
+**Icon:** upload `src/main/resources/assets/jockey_radio/icon.png` (the Jockey Radio broadcast
+mark) as the Modrinth project icon.
 
 ---
 
-## Open decisions before first publish
+## Settled (previously open) decisions
 
-1. **License (owner's call).** Currently `ARR` in `fabric.mod.json` with a matching
-   All-Rights-Reserved [`LICENSE`](LICENSE). If SavePoint.fm wants a permissive
-   open-source release instead, replace `LICENSE` with the standard MIT text and change the
-   `fabric.mod.json` `license` field from `"ARR"` to `"MIT"`. Both are valid on Modrinth.
-
-2. **Pack icon (required by Modrinth/ModMenu; asset not yet present).** `fabric.mod.json`
-   references **`assets/savepoint_radio/icon.png`**, but that file does **not exist yet**.
-   Before release, add an original PNG (128×128 or 256×256 recommended) at
-   `src/main/resources/assets/savepoint_radio/icon.png` and rebuild. Until then the
-   reference is a documented placeholder — harmless on a dedicated server (no ModMenu), but
-   it should be filled in for the public release. Also upload the same image as the
-   Modrinth project icon.
-
-3. **Contact URLs are placeholders.** `contact.sources` and `contact.issues` point at
-   `https://github.com/savepoint-fm/minecraft-savepoint-radio` — replace with the real
-   repository (or remove) before publishing. `contact.homepage` (`https://savepoint.fm`) is
-   real.
+1. **License:** `ARR`, © 2026 GBTI (matching `LICENSE` and the `fabric.mod.json` `license`
+   field). SavePoint is credited as the optional integration, not the owner.
+2. **Icon:** present at `assets/jockey_radio/icon.png` (256x256), generated from
+   `.product/logo/Jockey Radio.svg`; the full size set is in `.product/logo/exports/`.
+3. **Contact URLs:** `sources` / `issues` point at `github.com/gbti-network/jockey-radio`;
+   `homepage` is currently the same repo (swap in a product domain if/when one exists).
 
 ---
 
 ## Pre-flight verification
 
 - [ ] `./gradlew clean build` is green on JDK 25 (CI: `.github/workflows/build.yml`).
-- [ ] `build/libs/savepoint-radio-<version>.jar` exists and loads on a clean Fabric 26.2
-      server with Fabric API (+ Simple Voice Chat + ffmpeg for a full smoke test).
+- [ ] `build/libs/jockey-radio-<version>.jar` loads on a clean Fabric 26.2 server with Fabric
+      API (+ Simple Voice Chat + ffmpeg for a full smoke test).
 - [ ] `LICENSE` is present and bundled in the jar.
-- [ ] `assets/savepoint_radio/icon.png` exists and the `icon` field resolves.
-- [ ] `contact.sources` / `contact.issues` are real URLs.
+- [ ] `assets/jockey_radio/icon.png` exists and the `icon` field resolves.
+- [ ] jar `fabric.mod.json` reads `id: jockey_radio`, `name: Jockey Radio`, `authors: [GBTI]`.
 - [ ] No secrets (tokens, stream keys) appear in the jar, README, or listing.
 - [ ] Modrinth version declares Fabric API (required) and Simple Voice Chat (optional).
+- [ ] README / listing carry no stale "SavePoint Radio" or "Traveler's Jukebox" identity.

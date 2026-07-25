@@ -1,19 +1,19 @@
 {
 	"schemaVersion": 1,
-	"id": "savepoint_svc_buffer",
+	"id": "jockey_svc_buffer",
 	"version": "${version}",
-	"name": "SavePoint SVC Buffer",
-	"description": "Client-only mixin that deepens Simple Voice Chat's playout buffer beyond its 16-packet cap, removing the periodic micro-hitches in continuous music streams. Tunable via config/savepoint-svc-buffer.properties.",
+	"name": "Jockey Radio SVC Buffer",
+	"description": "Client-only mixin that deepens Simple Voice Chat's playout buffer beyond its 16-packet cap, removing the periodic micro-hitches in continuous music streams. Tunable via config/jockey-svc-buffer.properties.",
 	"authors": [
-		"SavePoint.fm"
+		"GBTI"
 	],
 	"contact": {
-		"homepage": "https://savepoint.fm"
+		"homepage": "https://github.com/gbti-network/jockey-radio"
 	},
 	"license": "ARR",
 	"environment": "client",
 	"mixins": [
-		"savepoint_svc_buffer.mixins.json"
+		"jockey_svc_buffer.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.19.3",

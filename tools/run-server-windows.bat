@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM Run the SavePoint Radio Minecraft server on WINDOWS-NATIVE Java 25 (off WSL).
+REM Run the Jockey Radio Minecraft server on WINDOWS-NATIVE Java 25 (off WSL).
 REM
 REM WHY: the Minecraft server's audio-delivery thread must NOT run inside the WSL2
 REM guest VM, which the Windows host freezes ~815 ms every ~33 s (see the build
@@ -31,8 +31,8 @@ if not exist "%JAVA%" (
 )
 cd /d "D:\_Outfits\GBTI\Repos\minecraft-savepoint-radio\.server"
 echo Starting self-healing RTMP relay (local test harness)...
-start "SavePoint RTMP Relay" /min cmd /c "D:\_Outfits\GBTI\Repos\minecraft-savepoint-radio\.server\rtmp-relay.bat"
-echo Launching SavePoint Radio server on Windows-native Java 25 ...
+start "Jockey RTMP Relay" /min cmd /c "D:\_Outfits\GBTI\Repos\minecraft-savepoint-radio\.server\rtmp-relay.bat"
+echo Launching Jockey Radio server on Windows-native Java 25 ...
 "%JAVA%" -Xms1G -Xmx2G -jar fabric-server-launch.jar nogui
 echo.
 echo Server exited. Press a key to close.

@@ -1,10 +1,10 @@
 {
 	"comparator_output": 15,
 	"description": {
-		"text": "Traveler's Jukebox"
+		"text": "Jockey Radio"
 	},
 	"length_in_seconds": 3600.0,
 	"sound_event": {
-		"sound_id": "travelers_jukebox:radio_stream"
+		"sound_id": "jockey_radio:radio_stream"
 	}
 }

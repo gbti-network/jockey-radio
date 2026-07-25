@@ -1,4 +1,4 @@
-# SavePoint Radio - Dev Server Panel (sow-003)
+# Jockey Radio - Dev Server Panel (sow-003)
 
 A single-file, stdlib-only Python web panel for running a local Minecraft Fabric
 dedicated server during mod development. It lives entirely under
