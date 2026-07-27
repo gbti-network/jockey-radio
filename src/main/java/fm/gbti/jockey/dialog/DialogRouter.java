@@ -58,7 +58,6 @@ public final class DialogRouter {
 			case "give" -> handleGive(player, tag);
 			case "test" -> handleTest(player, tag);
 			case "stop_monitor" -> handleStopMonitor(player, tag);
-			case "reload" -> handleReload(player);
 			default -> {
 				// Unknown action id path - ignore (do not touch the registry).
 			}
@@ -72,7 +71,9 @@ public final class DialogRouter {
 	private static void handleNav(ServerPlayer player, CompoundTag tag) {
 		String to = tag.getStringOr("to", "");
 		switch (to) {
-			case "root" -> DialogScreens.send(player, JockeyRadioDialogs.rootMenu(player.registryAccess()));
+			// Compatibility alias for dialog packets from the former hub flow.
+			case "root" -> DialogScreens.send(player,
+					JockeyRadioDialogs.manageList(player.registryAccess(), null));
 			case "new_disc" -> DialogScreens.send(player, JockeyRadioDialogs.sourceChooser());
 			case "create_pull" -> DialogScreens.send(player,
 					JockeyRadioDialogs.createPullForm(player.registryAccess(), Optional.empty(), false));
@@ -105,13 +106,14 @@ public final class DialogRouter {
 			case "pick_audio" -> handlePickAudio(player, tag);
 			case "manage" -> DialogScreens.send(player, JockeyRadioDialogs.manageList(player.registryAccess(), null));
 			case "detail" -> handleDetail(player, tag);
-			case "give" -> DialogScreens.send(player, JockeyRadioDialogs.giveMenu(player.registryAccess()));
+			// sow-014: the hub-level Give menu and Reload button are gone. Give lives on each
+			// disc's detail page (give_disc), and registry reload is the /jockey reload command.
 			case "give_disc" -> handleGiveForm(player, tag);
-			case "reload" -> handleReload(player);
 			case "edit" -> handleEdit(player, tag);
 			case "delete_confirm" -> handleDeleteConfirm(player, tag);
 			case "close" -> DialogScreens.clear(player);
-			default -> DialogScreens.send(player, JockeyRadioDialogs.rootMenu(player.registryAccess()));
+			default -> DialogScreens.send(player,
+					JockeyRadioDialogs.manageList(player.registryAccess(), null));
 		}
 	}
 
@@ -365,7 +367,12 @@ public final class DialogRouter {
 			String key = tag.getStringOr("stream_key", "");
 			// Blank on edit keeps the stored secret; never echoed back to the client.
 			def.streamKey = (edit && key.isBlank()) ? existing.streamKey : key;
-			def.rtmpBind = tag.getStringOr("rtmp_bind", DiscDefinition.DEFAULT_RTMP_BIND);
+			String bindFallback = edit
+					? DiscRegistry.get().get(editId)
+							.map(existingDisc -> existingDisc.rtmpBind)
+							.orElse(DiscDefinition.DEFAULT_RTMP_BIND)
+					: DiscDefinition.NEW_RTMP_BIND;
+			def.rtmpBind = tag.getStringOr("rtmp_bind", bindFallback);
 		} else if ("file".equals(source)) {
 			// sow-009: a FILE disc loops an http/https audio-file URL. No token/rtmp fields;
 			// validate() requires the streamUrl.
@@ -556,7 +563,12 @@ public final class DialogRouter {
 			def.rtmpPort = parseInt(tag.getStringOr("rtmp_port", ""), -1);
 			// Carry the entered key back so the round-trip does not lose / regenerate it.
 			def.streamKey = tag.getStringOr("stream_key", "");
-			def.rtmpBind = tag.getStringOr("rtmp_bind", DiscDefinition.DEFAULT_RTMP_BIND);
+			String bindFallback = edit
+					? DiscRegistry.get().get(editId)
+							.map(existingDisc -> existingDisc.rtmpBind)
+							.orElse(DiscDefinition.DEFAULT_RTMP_BIND)
+					: DiscDefinition.NEW_RTMP_BIND;
+			def.rtmpBind = tag.getStringOr("rtmp_bind", bindFallback);
 			DialogScreens.send(player, JockeyRadioDialogs.createRtmpForm(player.registryAccess(), Optional.of(def), edit));
 		} else if ("file".equals(source)) {
 			def.sourceType = DiscDefinition.SourceType.FILE;
@@ -683,9 +695,10 @@ public final class DialogRouter {
 	private static void handleGive(ServerPlayer player, CompoundTag tag) {
 		String discId = tag.getStringOr("disc_id", "");
 		// ret drives where the result notice returns: "detail" (from a disc page)
-		// reopens that disc; anything else returns to the hub.
+		// reopens that disc; anything else returns to the hub. sow-014: the hub give
+		// menu is gone, so a non-detail error path lands on the manage list instead.
 		boolean toDetail = "detail".equals(tag.getStringOr("ret", "root"));
-		String errBack = toDetail ? "give_disc" : "give";
+		String errBack = toDetail ? "give_disc" : "manage";
 		String errBackId = toDetail ? discId : "";
 
 		Optional<DiscDefinition> def = DiscRegistry.get().get(discId);
@@ -724,18 +737,11 @@ public final class DialogRouter {
 		RadioAudit.logGive(def.get().discId, RadioAudit.actor(player), RadioAudit.actor(target));
 		String name = def.get().name != null ? def.get().displayName() : def.get().discId;
 		String who = target == player ? "you" : safe(target.getName().getString());
+		// Non-detail is only reachable from a stale/forged payload (giveForm always sets
+		// ret=detail); land it on Manage to match the error path above.
 		DialogScreens.send(player, JockeyRadioDialogs.successThen("Disc given",
 				"Gave the '" + name + "' radio disc to " + who + ".",
-				toDetail ? "detail" : "root", toDetail ? discId : ""));
-	}
-
-	private static void handleReload(ServerPlayer player) {
-		DiscRegistry.get().reload();
-		String message = DiscRegistry.get().isReadOnly()
-				? "Reloaded " + DiscRegistry.get().size() + " disc(s), but " + DiscRegistry.FILE_NAME
-						+ " could not be fully read - SAVING IS DISABLED. Fix or remove that file, then reload again."
-				: "Reloaded " + DiscRegistry.get().size() + " disc(s).";
-		DialogScreens.send(player, JockeyRadioDialogs.noticeThen("Reloaded", message, "root"));
+				toDetail ? "detail" : "manage", toDetail ? discId : ""));
 	}
 
 	// ------------------------------------------------------------------

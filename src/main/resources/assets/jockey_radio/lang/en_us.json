@@ -4,8 +4,7 @@
 	"jockey_radio.menu.create_pull": "Stream from a URL",
 	"jockey_radio.menu.create_rtmp": "Create Receive RTMP disc",
 	"jockey_radio.menu.manage": "Manage discs",
-	"jockey_radio.menu.give": "Give disc",
-	"jockey_radio.menu.reload": "Reload registry",
+	"jockey_radio.menu.close": "Close",
 
 	"jockey_radio.input.disc_id": "Disc ID (a-z0-9_-, 1..32)",
 	"jockey_radio.input.name": "Display name",
@@ -23,6 +22,7 @@
 
 	"jockey_radio.button.save": "Save disc",
 	"jockey_radio.button.back": "Back",
+	"jockey_radio.button.close": "Close",
 	"jockey_radio.button.back_to_form": "Back to form",
 	"jockey_radio.button.ok": "OK",
 	"jockey_radio.button.cancel": "Cancel",
@@ -46,11 +46,6 @@
 
 	"jockey_radio.manage.title": "Manage discs",
 	"jockey_radio.manage.empty": "No discs yet - use Create to add one.",
-
-	"jockey_radio.give.title": "Give disc",
-	"jockey_radio.give.body": "Give a radio disc to yourself.",
-	"jockey_radio.give.empty": "No discs to give yet - create one first.",
-	"jockey_radio.give.choice": "Disc",
 
 	"jockey_radio.delete.title": "Delete disc?"
 }

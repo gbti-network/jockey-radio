@@ -13,6 +13,7 @@ import fm.gbti.jockey.disc.RadioDiscFactory;
 import fm.gbti.jockey.session.FeedRegistry;
 import fm.gbti.jockey.session.RadioManager;
 import fm.gbti.jockey.session.RadioSession;
+import fm.gbti.jockey.session.RtmpKeepAlive;
 import fm.gbti.jockey.session.StationEndpoints;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
@@ -111,7 +112,17 @@ public final class RadioCommands {
 		CommandSourceStack source = ctx.getSource();
 		RadioManager manager = RadioManager.get();
 		int count = manager.getSessionCount();
-		source.sendSuccess(() -> Component.literal("Radio sessions: " + count), false);
+		long active = manager.getSessions().stream()
+				.filter(session -> session.state() == RadioSession.State.ACTIVE)
+				.count();
+		long suspended = manager.getSessions().stream()
+				.filter(session -> session.state() == RadioSession.State.SUSPENDED)
+				.count();
+		int keepAlive = RtmpKeepAlive.get().anchoredCount();
+		source.sendSuccess(() -> Component.literal("Radio sessions: " + count
+				+ " (active=" + active
+				+ ", suspended=" + suspended
+				+ ", rtmpKeepAlive=" + keepAlive + ")"), false);
 		for (RadioSession session : manager.getSessions()) {
 			BlockPos pos = session.pos().pos();
 			String line = "  " + session.stationKey()
@@ -258,7 +269,7 @@ public final class RadioCommands {
 	// ------------------------------------------------------------------
 
 	/**
-	 * Opens the {@code /jockey} root dialog for the executing player. Requires
+	 * Opens the {@code /jockey} managed-disc list for the executing player. Requires
 	 * a player context (the dialog is pushed to a client connection); the console
 	 * uses the give/list/reload subcommands instead.
 	 */
@@ -269,7 +280,10 @@ public final class RadioCommands {
 					"Only a player can open the Jockey Radio menu. Use /jockey give|list|reload from the console."));
 			return 0;
 		}
-		DialogScreens.send(player, JockeyRadioDialogs.rootMenu(player.registryAccess()));
+		// sow-014 review: the managed list is the useful landing surface. It already
+		// contains every existing disc, + New disc, and Close, so the old three-item
+		// hub only added an extra click.
+		DialogScreens.send(player, JockeyRadioDialogs.manageList(player.registryAccess(), null));
 		return 1;
 	}
 

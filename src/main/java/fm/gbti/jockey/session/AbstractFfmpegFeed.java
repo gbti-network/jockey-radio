@@ -1,6 +1,7 @@
 package fm.gbti.jockey.session;
 
 import fm.gbti.jockey.JockeyRadioMod;
+import fm.gbti.jockey.config.RadioConfig;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -1773,13 +1774,15 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				synchronized (bufferLock) {
 					buffered = buffer.size();
 				}
-				JockeyRadioMod.LOGGER.info(
-						"[jockey] feed stats station={} frames={} delivered={} silence={} drops={} reconnects={} "
-								+ "underruns={} buffered={} latencyMs={} targetMs={} hostFreezes={} hostFreezeMs={}",
-						stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
-						drops.get(), reconnects.get(), underruns.get(), buffered,
-						buffered * FRAME_MILLIS, targetFrames * FRAME_MILLIS,
-						hostFreezeEvents.get(), hostFreezeMillis.get());
+				if (RadioConfig.get().feedStatsLogging) {
+					JockeyRadioMod.LOGGER.info(
+							"[jockey] feed stats station={} frames={} delivered={} silence={} drops={} reconnects={} "
+									+ "underruns={} buffered={} latencyMs={} targetMs={} hostFreezes={} hostFreezeMs={}",
+							stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
+							drops.get(), reconnects.get(), underruns.get(), buffered,
+							buffered * FRAME_MILLIS, targetFrames * FRAME_MILLIS,
+							hostFreezeEvents.get(), hostFreezeMillis.get());
+				}
 				// Gate ONLY on hard-cap OVERFLOW drops: those are the frames raising
 				// maxBufferSeconds actually bounds. Hysteresis catch-up and stall-resync
 				// drops are a bounded latency correction the maxBuffer knob does not

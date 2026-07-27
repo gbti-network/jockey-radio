@@ -55,6 +55,11 @@ public final class RtmpKeepAlive {
 		return INSTANCE;
 	}
 
+	/** Number of permanent RTMP feed anchors. Safe for diagnostics on any thread. */
+	public synchronized int anchoredCount() {
+		return anchored.size();
+	}
+
 	/**
 	 * Arms keep-alive and performs the initial reconcile. Call once from
 	 * {@code RadioManager.onServerStarting} AFTER the startup doctor has decided

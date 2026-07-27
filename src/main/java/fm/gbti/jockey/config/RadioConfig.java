@@ -485,6 +485,14 @@ public final class RadioConfig {
 	 */
 	public boolean feedDiagnostics = false;
 	/**
+	 * Whether each active feed writes its cumulative health snapshot to the server
+	 * log every 30 seconds. Off by default so production servers do not receive a
+	 * continuous INFO stream; enable temporarily when diagnosing a feed. This is
+	 * independent of {@link #feedDiagnostics}, which controls the CSV recorder.
+	 * Warnings and errors remain enabled regardless.
+	 */
+	public boolean feedStatsLogging = false;
+	/**
 	 * RTMP-receive idle keep-alive (sow-008). When {@code true} (default), every
 	 * RTMP-receive disc's ffmpeg listener is held bound and consuming 24/7 via a
 	 * permanent feed anchor - independent of players/sessions - so a station's push
@@ -1035,7 +1043,8 @@ public final class RadioConfig {
 		return Math.max(min, Math.min(max, value));
 	}
 
-	private static RadioConfig createDefault() {
+	/** Package-private so the default-file contract can be pinned by unit tests. */
+	static RadioConfig createDefault() {
 		RadioConfig config = new RadioConfig();
 		// Jockey Radio is standalone: a fresh config ships with NO stations, so nothing
 		// implies an external broadcasting service is required. Operators add their own config

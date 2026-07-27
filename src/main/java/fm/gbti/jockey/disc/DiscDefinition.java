@@ -66,6 +66,8 @@ public final class DiscDefinition {
 
 	public static final String DEFAULT_BASE_DISC = "minecraft:music_disc_13";
 	public static final String DEFAULT_RTMP_BIND = "127.0.0.1";
+	/** New UI-created RTMP discs target remote/managed-host publishers by default. */
+	public static final String NEW_RTMP_BIND = "0.0.0.0";
 	public static final int DEFAULT_RADIUS_BLOCKS = 32;
 
 	public String discId;

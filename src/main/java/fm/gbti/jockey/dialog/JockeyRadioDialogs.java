@@ -177,6 +177,9 @@ public final class JockeyRadioDialogs {
 		body.add(body(Lang.tr("jockey_radio.menu.body",
 				"Admin console - create and manage streaming radio discs.")));
 
+		// sow-014: a 3-item hub. Give lives inside Manage (each disc's detail page has a Give
+		// button), and registry reload stays available as the /jockey reload console command -
+		// neither earns a top-level slot.
 		List<ActionButton> actions = List.of(
 				navButton(Lang.tr("jockey_radio.menu.new", "+ New disc"),
 						Lang.tr("jockey_radio.menu.new_tip", "Stream from a URL, or receive a broadcast"),
@@ -184,12 +187,6 @@ public final class JockeyRadioDialogs {
 				navButton(Lang.tr("jockey_radio.menu.manage", "Manage discs"),
 						Lang.tr("jockey_radio.menu.manage_tip", "Browse, edit, connect, give"),
 						"manage", 220),
-				navButton(Lang.tr("jockey_radio.menu.give", "Give disc"),
-						Lang.tr("jockey_radio.menu.give_tip", "Hand a disc to a player"),
-						"give", 220),
-				navButton(Lang.tr("jockey_radio.menu.reload", "Reload registry"),
-						Lang.tr("jockey_radio.menu.reload_tip", "Re-read discs.json from disk"),
-						"reload", 220),
 				navButton(Lang.tr("jockey_radio.menu.close", "Close"),
 						Lang.tr("jockey_radio.menu.close_tip", "Or press Esc"),
 						"close", 220));
@@ -228,7 +225,8 @@ public final class JockeyRadioDialogs {
 					"Paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link (resolved via yt-dlp)"),
 					"create_platform", 260));
 		}
-		actions.add(navButton(Lang.tr("jockey_radio.button.back", "Back"), "root", 150));
+		// sow-014: top-level surfaces close rather than bounce back to the hub.
+		actions.add(navButton(Lang.tr("jockey_radio.button.close", "Close"), "close", 150));
 
 		List<DialogBody> body = new ArrayList<>();
 		body.add(body(Lang.tr("jockey_radio.source.body", "Where does this disc's audio come from?")));
@@ -263,6 +261,8 @@ public final class JockeyRadioDialogs {
 				: body(Lang.tr("jockey_radio.form.pull.body_create",
 						"New stream disc - the server plays any stream URL (a SavePoint station, an m3u8 playlist, an icecast/http stream, ...).")));
 		body.add(body(colorNote()));
+		// Token hint for the marquee field below (its label is kept short so the box centers).
+		body.add(body(note("Marquee tokens: {station} {title} {artist} {segment}")));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
@@ -291,10 +291,10 @@ public final class JockeyRadioDialogs {
 						pick(values, d -> d.nowPlayingUrl, ""), 512)));
 		// Per-disc on-air marquee layout (sow-006 review-feedback). Blank = the built-in
 		// "♪ {station} — LIVE — {title} · {artist}". Placeholders: {station} {title}
-		// {artist} {segment}; a missing field collapses its adjacent separator.
+		// {artist} {segment}; a missing field collapses its adjacent separator. Short
+		// label on purpose - see the RTMP form's alignment note; tokens live in the body.
 		inputs.add(new Input("marquee_template",
-				text(Lang.tr("jockey_radio.input.marquee_template",
-						"Marquee: {station}/{title}/{artist}/{segment} (blank=default)"),
+				text(Lang.tr("jockey_radio.input.marquee_template", "On-air marquee (blank = default)"),
 						pick(values, d -> d.nowPlayingTemplate, ""), 128)));
 
 		String currentStyle = pick(values, d -> d.baseDisc, DiscDefinition.DEFAULT_BASE_DISC);
@@ -480,7 +480,16 @@ public final class JockeyRadioDialogs {
 				? body(Component.literal("Editing this RTMP receive disc."))
 				: body(Lang.tr("jockey_radio.form.rtmp.body_create",
 						"New RTMP receive disc - a DJ/OBS/relay publishes into the server.")));
+		// The admin configuring SavePoint/OBS needs the ingest shape BEFORE saving; the exact
+		// copyable URLs (with the real host and key) appear on the disc's detail page after save.
+		if (!edit) {
+			body.add(body(note("Broadcaster ingest will be rtmp://<this server>:<port below>/live "
+					+ "plus the stream key (paste as SavePoint/OBS's RTMP URL + key). Exact copyable "
+					+ "URLs appear on the disc page after saving.")));
+		}
 		body.add(body(colorNote()));
+		// Token hint for the marquee field below (its label is kept short so the box centers).
+		body.add(body(note("Marquee tokens: {station} {title} {artist} {segment}")));
 
 		List<Input> inputs = new ArrayList<>();
 		if (!edit) {
@@ -507,7 +516,10 @@ public final class JockeyRadioDialogs {
 				? Lang.tr("jockey_radio.input.stream_key_keep", "Stream key (blank keeps current)")
 				: Lang.tr("jockey_radio.input.stream_key", "Stream key"),
 				pick(values, d -> d.streamKey, edit ? "" : generateStreamKey()), 64)));
-		inputs.add(new Input("rtmp_bind", bindInput(pick(values, d -> d.rtmpBind, DiscDefinition.DEFAULT_RTMP_BIND))));
+		// Managed hosting is the primary deployment: a new disc must accept the remote
+		// SavePoint/OBS publisher. Edits preserve the stored bind, including legacy loopback.
+		inputs.add(new Input("rtmp_bind",
+				bindInput(pick(values, d -> d.rtmpBind, DiscDefinition.NEW_RTMP_BIND))));
 		// Optional: an RTMP ingest carries no station identity, so paste the station's
 		// now-playing URL here to show real track info on the bar (e.g.
 		// http://127.0.0.1:7101/api/public/stations/2/now-playing - use 127.0.0.1, not
@@ -517,10 +529,11 @@ public final class JockeyRadioDialogs {
 						pick(values, d -> d.nowPlayingUrl, ""), 512)));
 		// Per-disc on-air marquee layout (sow-006 review-feedback). Blank = the built-in
 		// "♪ {station} — LIVE — {title} · {artist}". Placeholders: {station} {title}
-		// {artist} {segment}; a missing field collapses its adjacent separator.
+		// {artist} {segment}; a missing field collapses its adjacent separator. The label
+		// must stay narrower than the 220px input box or the field renders off-center
+		// (the widget sizes to the label); the token list lives in the body note above.
 		inputs.add(new Input("marquee_template",
-				text(Lang.tr("jockey_radio.input.marquee_template",
-						"Marquee: {station}/{title}/{artist}/{segment} (blank=default)"),
+				text(Lang.tr("jockey_radio.input.marquee_template", "On-air marquee (blank = default)"),
 						pick(values, d -> d.nowPlayingTemplate, ""), 128)));
 
 		String currentStyle = pick(values, d -> d.baseDisc, DiscDefinition.DEFAULT_BASE_DISC);
@@ -612,7 +625,8 @@ public final class JockeyRadioDialogs {
 		actions.add(navButton(Lang.tr("jockey_radio.button.new_disc", "+ New disc"),
 				Lang.tr("jockey_radio.menu.new_tip", "Stream from a URL, or receive a broadcast"),
 				"new_disc", 220));
-		actions.add(navButton(Lang.tr("jockey_radio.button.back", "Back"), "root", 220));
+		// sow-014: top-level surfaces close rather than bounce back to the hub.
+		actions.add(navButton(Lang.tr("jockey_radio.button.close", "Close"), "close", 220));
 
 		CommonDialogData common = commonNone(brandTitle(
 				Lang.tr("jockey_radio.manage.title", "Discs")), body, List.of());
@@ -759,38 +773,6 @@ public final class JockeyRadioDialogs {
 				List.of(body(Component.literal("Delete \"" + name + "\" (" + discId + ")? This cannot be undone."))),
 				List.of());
 		return new MultiActionDialog(common, List.of(cancel, confirm), Optional.empty(), 1);
-	}
-
-	/** Give menu (from the hub): choose a disc, optionally name a player, receive a copy. */
-	public static Dialog giveMenu(HolderLookup.Provider registries) {
-		List<DiscDefinition> discs = DiscRegistry.get().list();
-		if (discs.isEmpty()) {
-			return noticeThen(Lang.tr("jockey_radio.give.title", "Give disc"),
-					Lang.tr("jockey_radio.give.empty", "No discs to give yet - create one first."), "root");
-		}
-		List<SingleOptionInput.Entry> entries = new ArrayList<>();
-		boolean first = true;
-		for (DiscDefinition d : discs) {
-			entries.add(new SingleOptionInput.Entry(d.discId,
-					Optional.of(Component.literal(d.discId + " - " + d.name)), first));
-			first = false;
-		}
-		Input choice = new Input("disc_id",
-				new SingleOptionInput(220, entries, Lang.tr("jockey_radio.give.choice", "Disc"), true));
-		Input player = new Input("player",
-				text(Lang.tr("jockey_radio.input.player", "Player (blank = you)"), "", 32));
-
-		CompoundTag additions = new CompoundTag();
-		additions.putString("ret", "root");
-		ActionButton give = new ActionButton(
-				new CommonButtonData(Lang.tr("jockey_radio.button.give", "Give disc"),
-						Optional.of(Lang.tr("jockey_radio.give.tip", "Give to yourself, or the named player")), 150),
-				Optional.of(new CustomAll(id("give"), Optional.of(additions))));
-		List<ActionButton> actions = List.of(give, navButton(Lang.tr("jockey_radio.button.back", "Back"), "root", 150));
-		CommonDialogData common = commonNone(brandTitle(Lang.tr("jockey_radio.give.title", "Give disc")),
-				List.of(body(Lang.tr("jockey_radio.give.body", "Give a radio disc to a player."))),
-				List.of(choice, player));
-		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
 	/**
@@ -1140,10 +1122,10 @@ public final class JockeyRadioDialogs {
 			entries.add(new SingleOptionInput.Entry(selected,
 					Optional.of(Component.literal(selected + " (custom)")), true));
 		}
-		entries.add(new SingleOptionInput.Entry("127.0.0.1",
-				Optional.of(Component.literal("127.0.0.1 (local only)")), loopback));
 		entries.add(new SingleOptionInput.Entry("0.0.0.0",
-				Optional.of(Component.literal("0.0.0.0 (all interfaces)")), any));
+				Optional.of(Component.literal("Remote / managed host (0.0.0.0)")), any));
+		entries.add(new SingleOptionInput.Entry("127.0.0.1",
+				Optional.of(Component.literal("Local broadcaster only (127.0.0.1)")), loopback));
 		return new SingleOptionInput(220, List.copyOf(entries),
 				Lang.tr("jockey_radio.input.rtmp_bind", "RTMP bind"), true);
 	}
