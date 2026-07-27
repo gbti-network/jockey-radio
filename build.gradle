@@ -75,8 +75,10 @@ processResources {
 	def bundledDeno = file("${productDir}/deno")
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
 	def bundledLicenses = file("${productDir}/licenses")
-	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno)
-	inputs.dir(bundledLicenses)
+	// Declare the optional product tree via inputs.files (NOT inputs.dir): inputs.files tolerates a
+	// missing path, so CI - which has no .product/ - validates and takes the thin-jar branch below,
+	// whereas inputs.dir would fail validation on the absent directory before the fallback runs.
+	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno, bundledNotice, bundledLicenses)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
 		into('jockey_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
