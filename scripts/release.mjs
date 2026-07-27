@@ -119,6 +119,76 @@ function resolveJavaHome() {
   return null;
 }
 
+function resolveWslBuild() {
+  if (!IS_WIN) return null;
+  const distro = process.env.JOCKEY_RELEASE_WSL_DISTRO || 'Ubuntu';
+  let javaHome = process.env.JOCKEY_RELEASE_WSL_JAVA_HOME || '';
+  if (!javaHome) {
+    const probe = tryRun('wsl.exe', [
+      '-d', distro, '--', 'bash', '-lc',
+      'j=$(find "$HOME/.jdks" -maxdepth 3 -type f -name javac -path "*/jdk-25*/bin/javac" -print -quit 2>/dev/null); [ -n "$j" ] && dirname "$(dirname "$j")"',
+    ]);
+    if (probe.code !== 0 || !probe.out) return null;
+    javaHome = probe.out;
+  }
+  const drivePath = ROOT.match(/^([A-Za-z]):[\\/](.*)$/);
+  if (!drivePath) return null;
+  const root = `/mnt/${drivePath[1].toLowerCase()}/${drivePath[2].replaceAll('\\', '/')}`;
+  return { distro, javaHome, root };
+}
+
+function runBuild(javaHome, wslBuild) {
+  if (javaHome) {
+    log(C.dim(`    JAVA_HOME=${javaHome}`));
+    return spawnSync(GRADLEW, ['clean', 'build'], {
+      cwd: ROOT, stdio: 'inherit', env: { ...process.env, JAVA_HOME: javaHome }, shell: false,
+    });
+  }
+  if (wslBuild) {
+    log(C.dim(`    WSL ${wslBuild.distro}, JAVA_HOME=${wslBuild.javaHome}`));
+    const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+    const command = `cd ${quote(wslBuild.root)} && export JAVA_HOME=${quote(wslBuild.javaHome)} && ./gradlew clean build`;
+    return spawnSync('wsl.exe', [
+      '-d', wslBuild.distro, '--', 'bash', '-lc', command,
+    ], { cwd: ROOT, stdio: 'inherit', shell: false });
+  }
+  warn('no JDK 25 found via JAVA_HOME, ~/.jdks, or WSL - relying on the Gradle toolchain');
+  return spawnSync(GRADLEW, ['clean', 'build'], { cwd: ROOT, stdio: 'inherit', shell: false });
+}
+
+async function createReleaseViaApi({ token, tag, title, jarPath, jarName }) {
+  if (!token) die('GitHub CLI is unavailable and GITHUB_PAT is not set in .env');
+  const remote = git('remote', 'get-url', 'origin');
+  const match = remote.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/);
+  if (!match) die(`cannot derive GitHub repository from origin: ${remote}`);
+  const [, owner, repo] = match;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'jockey-radio-release',
+  };
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tag_name: tag, name: title, generate_release_notes: true,
+      draft: false, prerelease: false, make_latest: 'true',
+    }),
+  });
+  if (!response.ok) throw new Error(`GitHub release API failed (${response.status}): ${await response.text()}`);
+  const release = await response.json();
+  const bytes = readFileSync(jarPath);
+  const uploadUrl = release.upload_url.replace(/\{.*$/, '') + `?name=${encodeURIComponent(jarName)}`;
+  const upload = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/java-archive' },
+    body: bytes,
+  });
+  if (!upload.ok) throw new Error(`GitHub asset upload failed (${upload.status}): ${await upload.text()}`);
+  return release.html_url;
+}
+
 // ---- main ------------------------------------------------------------------
 const undo = []; // rollback actions, run in reverse on failure
 async function main() {
@@ -128,12 +198,18 @@ async function main() {
   // Prereqs -------------------------------------------------------------------
   step('checking prerequisites');
   const auth = tryRun('gh', ['auth', 'status']);
+  const hasGh = auth.code === 0;
   let ghEnv = { ...process.env };
+  let githubToken = '';
   if (auth.code !== 0) {
     // Fall back to the PAT in .env so a fresh machine can still publish.
     const envPath = path.join(ROOT, '.env');
     const pat = existsSync(envPath) && (readFileSync(envPath, 'utf8').match(/^GITHUB_PAT=(.+)$/m) || [])[1];
-    if (pat) { ghEnv.GH_TOKEN = pat.trim(); if (!DRY) warn('gh not logged in - using GITHUB_PAT from .env'); }
+    if (pat) {
+      githubToken = pat.trim();
+      ghEnv.GH_TOKEN = githubToken;
+      if (!DRY) warn('gh unavailable or not logged in - using GITHUB_PAT from .env');
+    }
     else if (!DRY && !NO_RELEASE) die('gh CLI is not authenticated. Run `gh auth login` (or set GITHUB_PAT in .env).');
   }
   const dirty = gitOk('status', '--porcelain').out;
@@ -180,10 +256,7 @@ async function main() {
   // 2. Build the jar ----------------------------------------------------------
   step('building the mod jar (local fat jar with bundled binaries)');
   const javaHome = resolveJavaHome();
-  if (javaHome) log(C.dim(`    JAVA_HOME=${javaHome}`));
-  else warn('no JDK 25 found via JAVA_HOME or ~/.jdks - relying on the Gradle toolchain');
-  const buildEnv = javaHome ? { ...process.env, JAVA_HOME: javaHome } : process.env;
-  const build = spawnSync(GRADLEW, ['clean', 'build'], { cwd: ROOT, stdio: 'inherit', env: buildEnv, shell: false });
+  const build = runBuild(javaHome, resolveWslBuild());
   if (build.status !== 0) throw new Error('gradle build failed');
   if (!existsSync(jarPath)) throw new Error(`expected jar not found: ${jarPath}`);
   const jarMb = (readFileSync(jarPath).length / 1e6).toFixed(1);
@@ -209,16 +282,20 @@ async function main() {
     return;
   }
   step('creating the GitHub release and attaching the jar');
-  const rel = spawnSync('gh', [
-    'release', 'create', tag, jarPath,
-    '--title', title,
-    '--generate-notes',
-    '--latest',
-    '--verify-tag',
-  ], { cwd: ROOT, stdio: 'inherit', env: ghEnv, shell: false });
-  if (rel.status !== 0) throw new Error('gh release create failed');
-
-  const url = tryRun('gh', ['release', 'view', tag, '--json', 'url', '--jq', '.url'], { env: ghEnv }).out;
+  let url;
+  if (hasGh) {
+    const rel = spawnSync('gh', [
+      'release', 'create', tag, jarPath,
+      '--title', title,
+      '--generate-notes',
+      '--latest',
+      '--verify-tag',
+    ], { cwd: ROOT, stdio: 'inherit', env: ghEnv, shell: false });
+    if (rel.status !== 0) throw new Error('gh release create failed');
+    url = tryRun('gh', ['release', 'view', tag, '--json', 'url', '--jq', '.url'], { env: ghEnv }).out;
+  } else {
+    url = await createReleaseViaApi({ token: githubToken, tag, title, jarPath, jarName });
+  }
   log('');
   log(C.green('✓ ') + C.bold(`released ${title}`));
   if (url) log('  ' + url);
