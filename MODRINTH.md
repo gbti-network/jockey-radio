@@ -19,7 +19,7 @@ The distributable jar is in **`build/libs/`**:
 - `jockey-radio-<version>.jar` - the mod (upload this)
 - `jockey-radio-<version>-sources.jar` - sources (optional additional file)
 
-`<version>` comes from `mod_version` in `gradle.properties` (currently `0.1.0`); the full
+`<version>` comes from `mod_version` in `gradle.properties` (currently `0.1.3`); the full
 jar name is `mod_version+build.<n>` where `npm run release` bumps the build number.
 
 > On this unobfuscated 26.2 toolchain there is no `remapJar` task, so `build` produces the
@@ -37,13 +37,13 @@ mirror it in the Modrinth form:
 
 | Modrinth field  | Value / source                                                            |
 | --------------- | ------------------------------------------------------------------------- |
-| Name            | **Jockey Radio: Live Radio & Custom Music Discs** (title per branding-ops) |
+| Name            | **Jockey Radio**                                                           |
 | Summary         | `description` in fabric.mod.json                                          |
 | Publisher       | GBTI                                                                       |
-| Environment     | Server: **required** · Client: **optional** (`environment: "server"`, ducking) |
+| Environment     | Server: **required** · Client: **unsupported** (`environment: "server"`)   |
 | Loaders         | Fabric                                                                    |
 | Game versions   | `26.2` - confirm the exact Modrinth game-version label at publish time    |
-| Version number  | `mod_version` (e.g. `0.1.0`)                                              |
+| Version number  | `0.1.3+build.4`                                                          |
 | Channel         | Release / Beta as appropriate                                            |
 | License         | ARR                                                                       |
 | Links           | `contact.homepage` / `sources` / `issues` (github.com/gbti-network/jockey-radio) |

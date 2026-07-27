@@ -3,10 +3,11 @@
 **Put a live radio station on a Minecraft music disc.** Drop a configured disc into any
 jukebox and everyone nearby hears a live stream, positionally, through
 [Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat), as if a radio were playing in
-the world. No new items, no resource pack, and no client mod required just to listen.
+the world. No new items or resource pack, and no Jockey Radio client component; listeners use the
+Simple Voice Chat client.
 
 - **Minecraft:** 26.2 · **Loader:** Fabric 0.19.3+ · **Java:** 25
-- **Mod id:** `jockey_radio` · **Environment:** server (client side optional)
+- **Mod id:** `jockey_radio` · **Environment:** server (Jockey Radio client unsupported)
 - **Publisher:** GBTI · Featured broadcasting integration: **SavePoint**
 
 <img src="screenshots/jukebox-now-playing.jpg" width="300" alt="A jukebox playing a live radio disc with a now-playing boss bar">
@@ -43,8 +44,9 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 **To listen:** Fabric Loader + Fabric API + the Simple Voice Chat client. The Jockey Radio jar is
 **not** required on the client.
 
-**Client (optional):** installing the jar client-side adds one thing, **music ducking** (vanilla
-music quiets near a playing jukebox). Listening works fine without it.
+**Client:** do not install the Jockey Radio jar client-side. Listeners only need the normal
+Simple Voice Chat client and its dependencies; Simple Voice Chat handles music ducking
+automatically while radio audio is playing.
 
 ## Install
 
@@ -117,8 +119,7 @@ ones you are most likely to touch:
   "adminPermissionLevel": 3,      // op level required by /jockey (0..4)
   "nowPlayingHud": true,          // the NOW-PLAYING boss bar
   "nowPlayingHudMode": "beacon",  // "beacon" (needs a trigger block nearby) or "always"
-  "useRawBroadcastPath": true,    // SavePoint raw path vs Direct Stream Access
-  "suppressGameMusic": true       // duck vanilla music near a playing jukebox
+  "useRawBroadcastPath": true     // SavePoint raw path vs Direct Stream Access
 }
 ```
 
