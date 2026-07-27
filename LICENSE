@@ -18,16 +18,9 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER I
 AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-----------------------------------------------------------------------------------
-NOTE (owner decision, not part of the license grant): the fabric.mod.json "license"
-field is set to "ARR" (All Rights Reserved) to match this notice. If GBTI
-prefers to publish under a permissive open-source license instead, replace the text
-above with the standard MIT License text and change the fabric.mod.json "license"
-field from "ARR" to "MIT".
-
 Third-party notes: this mod compiles against the Simple Voice Chat plugin API
 (de.maxhenkel.voicechat:voicechat-api) as a compile-only dependency; none of that
 API's code is bundled in the released jar. The release jar additionally bundles the
 ffmpeg (LGPL), yt-dlp (Unlicense), and deno (MIT) executables, which it runs as
-separate processes; see .product/THIRD-PARTY-NOTICES.txt and THIRD-PARTY-NOTICES.txt
-("Dependency licensing").
+separate processes. Their notices and full license texts are included inside the
+release jar under jockey_radio/THIRD-PARTY-NOTICES.txt and jockey_radio/licenses/.

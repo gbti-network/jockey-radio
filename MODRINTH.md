@@ -1,8 +1,7 @@
 # Publishing Jockey Radio
 
 Release checklist for a Modrinth / Fabric distribution. **This document does not publish
-anything - it records the steps.** The listing copy, headings, and gallery plan live in
-`.data/ops/branding-ops/branding-ops.md` (local, off-repo).
+anything - it records the steps.**
 
 ---
 
@@ -24,7 +23,8 @@ jar name is `mod_version+build.<n>` where `npm run release` bumps the build numb
 
 > On this unobfuscated 26.2 toolchain there is no `remapJar` task, so `build` produces the
 > final jar directly via `jar`. The `LICENSE` file at the repo root is bundled into the jar
-> by `build.gradle`. On linux/amd64 the jar also bundles ffmpeg/yt-dlp/deno (from `.product/`)
+> by `build.gradle`. On linux/amd64 the release jar also bundles ffmpeg/yt-dlp/deno from local
+> release inputs
 > for a zero-install drop-in; a build without those present is a THIN jar (falls back to a
 > configured/PATH ffmpeg).
 
@@ -71,8 +71,7 @@ mark) as the Modrinth project icon.
 
 1. **License:** `ARR`, © 2026 GBTI (matching `LICENSE` and the `fabric.mod.json` `license`
    field). SavePoint is credited as the optional integration, not the owner.
-2. **Icon:** present at `assets/jockey_radio/icon.png` (256x256), generated from
-   `.product/logo/Jockey Radio.svg`; the full size set is in `.product/logo/exports/`.
+2. **Icon:** present at `assets/jockey_radio/icon.png` (256x256).
 3. **Contact URLs:** `sources` / `issues` point at `github.com/gbti-network/jockey-radio`;
    `homepage` is currently the same repo (swap in a product domain if/when one exists).
 

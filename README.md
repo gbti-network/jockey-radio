@@ -45,8 +45,8 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 **not** required on the client.
 
 **Client:** do not install the Jockey Radio jar client-side. Listeners only need the normal
-Simple Voice Chat client and its dependencies; Simple Voice Chat handles music ducking
-automatically while radio audio is playing.
+Simple Voice Chat client and its dependencies. Jockey Radio suppresses competing Minecraft
+background music automatically from the server while a player is near an active radio.
 
 ## Install
 
@@ -125,6 +125,30 @@ ones you are most likely to touch:
 
 Admin discs live in `config/jockey_radio/discs.json` (managed by the `/jockey` UI, hand-editable);
 uploaded FILE-disc audio sits alongside in `config/jockey_radio/audio/`.
+
+## Scaling recommendations
+
+Jockey Radio supports multiple simultaneous discs and stations, but it has **not been load-tested
+at large-server scale**. Current testing demonstrates four to six concurrent feeds on the
+development host; it does not establish a maximum player, disc, station, or jukebox capacity.
+
+For the `0.1.x` beta, begin conservatively:
+
+- Up to **four distinct active sources** at once.
+- Up to **eight active jukeboxes**, preferably with non-overlapping audible areas.
+- Increase those numbers gradually while watching Minecraft tick time, CPU, memory, network egress,
+  feed underruns, reconnects, and voice packet quality.
+
+Jukeboxes playing the same managed disc share one upstream ffmpeg feed, but each active jukebox
+still uses its own Opus encoder and Simple Voice Chat channel. Players inside overlapping audible
+radii may receive multiple channels, increasing server encoding and network work.
+
+Inactive HLS, direct URL, file, and platform discs use negligible streaming resources. RTMP receive
+discs are different: when RTMP keep-alive is enabled, every configured RTMP disc keeps a listener
+available even while unplaced. Configure only the RTMP endpoints you intend to keep active.
+
+These are cautious starting recommendations, not enforced limits or capacity guarantees. Operators
+should validate capacity on their own hosting tier before using Jockey Radio for a large event.
 
 ## Credits & license
 
