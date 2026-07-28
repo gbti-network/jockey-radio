@@ -78,20 +78,19 @@ known-free port.
 A direct audio URL or a file dropped in `config/jockey_radio/audio/`, served locally and looped -
 ambient beds, event music, a fixed track. A file plays continuously rather than showing live/idle.
 
-### Platform links (SoundCloud, Twitch, Kick, Mixcloud, and more)
-yt-dlp resolves a supported page link to a playable stream (a bundled `deno` provides the JS
-runtime some sites need). The resolver is **generic**: it hands the link to yt-dlp, so many sites
-resolve - SoundCloud, Twitch, Kick, Mixcloud, and **YouTube on a best-effort basis** - though
-support and reliability vary by site and some block datacenter IPs.
+### Platform links (opt-in, off by default)
+An off-by-default option (`enablePlatformLinks`) that ships with the mod but is **not an advertised or
+promoted feature**. When an operator enables it, yt-dlp resolves a supported page link to a playable
+stream (a bundled `deno` provides the JS runtime some sites need). The resolver is generic (it hands
+the link to yt-dlp); support and reliability vary by site, and some block datacenter IPs.
 
 > ### ⚠️ Read before enabling platform links
-> Platform links are **off by default** (`enablePlatformLinks`). Pulling a third-party stream into
-> your server and playing it to others may be governed by **that platform's Terms of Service and by
-> copyright law.** Before enabling this feature, **review the Terms of Service of each platform you
-> intend to use** (YouTube, Twitch, Kick, SoundCloud, Mixcloud, and any other) and confirm you hold
-> the right to rebroadcast the content on your server. Enabling `enablePlatformLinks` is your
-> explicit acceptance of that responsibility. Jockey Radio distributes no audio itself, grants no
-> such rights, and is not affiliated with or endorsed by any of these platforms.
+> Pulling a third-party stream into your server and playing it to others may be governed by **that
+> platform's Terms of Service and by copyright law.** Before enabling `enablePlatformLinks`, **review
+> the Terms of Service of each platform you intend to use** and confirm you hold the right to
+> rebroadcast the content on your server. Enabling the setting is your explicit acceptance of that
+> responsibility. Jockey Radio distributes no audio itself, grants no rebroadcasting rights, offers no
+> warranty for platform-link sources, and is not affiliated with or endorsed by any of those platforms.
 
 ## Admin commands
 
@@ -114,7 +113,7 @@ ones you are most likely to touch:
 
 ```jsonc
 {
-  "enablePlatformLinks": false,   // gate SoundCloud/Twitch/Kick/YouTube/... (see the warning above)
+  "enablePlatformLinks": false,   // opt-in platform-link resolution, off by default (see the warning above)
   "useBundledBinaries": true,     // self-extract the bundled ffmpeg/yt-dlp/deno (linux/amd64)
   "adminPermissionLevel": 3,      // op level required by /jockey (0..4)
   "nowPlayingHud": true,          // the NOW-PLAYING boss bar
