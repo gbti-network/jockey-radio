@@ -52,8 +52,8 @@ public final class BundledBinaries {
 	 * change, so a mod upgrade re-extracts instead of running a stale copy.
 	 */
 	enum Platform {
-		LINUX_AMD64("linux-amd64", "", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.07.04+deno-2.9.4+jockey-radio"),
-		WINDOWS_AMD64("windows-amd64", ".exe", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.07.04+deno-2.9.4+jockey-radio");
+		LINUX_AMD64("linux-amd64", "", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.08.19+deno-2.9.4+jockey-radio"),
+		WINDOWS_AMD64("windows-amd64", ".exe", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.08.19+deno-2.9.4+jockey-radio");
 
 		final String dir;
 		final String exeSuffix;
