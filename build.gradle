@@ -115,7 +115,7 @@ tasks.withType(JavaCompile).configureEach {
 // so a normal build never depends on the network or on yt-dlp being installed.
 tasks.named('test', Test) {
 	useJUnitPlatform {
-		excludeTags 'connector'
+		excludeTags 'connector', 'ffmpeg'
 	}
 	testLogging {
 		events 'passed', 'failed', 'skipped'
@@ -144,6 +144,28 @@ tasks.register('connectorCheck', Test) {
 	testLogging {
 		events 'passed', 'failed', 'skipped'
 		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
+}
+
+// Live feed checks against a real ffmpeg (RTMP stream-key enforcement). Opt-in: needs an ffmpeg
+// with lavfi, and binds loopback ports.
+//
+//   ./gradlew ffmpegCheck                          # uses ffmpeg from PATH
+//   ./gradlew ffmpegCheck -Pffmpeg=/path/to/ffmpeg
+tasks.register('ffmpegCheck', Test) {
+	group = 'jockey'
+	description = 'Live feed checks against a real ffmpeg (loopback only).'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'ffmpeg'
+	}
+	systemProperty 'jockey.ffmpeg.enabled', 'true'
+	systemProperty 'jockey.ffmpeg', (project.findProperty('ffmpeg') ?: 'ffmpeg').toString()
+	outputs.upToDateWhen { false }
+	testLogging {
+		events 'passed', 'failed', 'skipped'
 		exceptionFormat = 'full'
 	}
 }

@@ -3,6 +3,7 @@ package fm.gbti.jockey.session;
 import fm.gbti.jockey.JockeyRadioMod;
 
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * RTMP-receive feed: the mod runs an ffmpeg RTMP listener and a DJ/OBS/relay
@@ -15,6 +16,11 @@ import java.util.concurrent.TimeUnit;
  * per RTMP disc. The stream key gates who may publish and is a secret: it never
  * reaches the logs (redacted from stderr, and only the port is printed in the
  * waiting line).</p>
+ *
+ * <p>ffmpeg's listener does NOT enforce the key: a publisher using any other stream
+ * name is logged as {@code Unexpected stream X, expecting Y} and then accepted. This
+ * feed enforces it instead ({@link #isRejectStderr}): the connection is killed and
+ * none of its audio is offered.</p>
  */
 public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 
@@ -45,6 +51,10 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	private static final long FAST_ERROR_RETRY_ATTEMPTS = 5L;
 	/** Ceiling for the escalated error delay, so a freed port is still picked up promptly. */
 	private static final long MAX_ERROR_RESPAWN_DELAY_MILLIS = 60_000L;
+	/** First-frame hold so a wrong-key rejection always lands before any audio is offered. */
+	private static final long ADMISSION_DELAY_MILLIS = 250L;
+	/** ffmpeg's stream-name mismatch warning; the name the publisher sent sits between the groups. */
+	private static final Pattern UNEXPECTED_STREAM = Pattern.compile("(Unexpected stream ).*(, expecting )");
 
 	public RtmpReceiveFeed(String stationKey, String rtmpBind, int rtmpPort, String streamKey,
 			String ffmpegBinary, int maxBufferFrames, int targetFrames, int prerollFrames, long maxBackoffSeconds,
@@ -128,6 +138,21 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 				|| line.contains("Immediate exit requested");
 	}
 
+	/**
+	 * A publisher whose stream name is not the key. The rejected connection is
+	 * classified idle (no fatal line), so the listener is back within the short idle
+	 * delay and a wrong-key client cannot lock the real publisher out of the port.
+	 */
+	@Override
+	protected boolean isRejectStderr(String line) {
+		return line.contains("Unexpected stream ");
+	}
+
+	@Override
+	protected long admissionDelayMillis() {
+		return ADMISSION_DELAY_MILLIS;
+	}
+
 	@Override
 	protected void onIdle(long backoffSeconds) {
 		connectionState = "waiting";
@@ -179,7 +204,9 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 
 	@Override
 	protected String sanitize(String line) {
-		String out = line;
+		// The name a rejected publisher sent can be a near-miss of the real key (a typo), so
+		// it is masked as well as the expected key.
+		String out = UNEXPECTED_STREAM.matcher(line).replaceAll("$1***$2");
 		if (out.contains(listenUrl)) {
 			out = out.replace(listenUrl, "rtmp://" + rtmpBind + ":" + rtmpPort + "/live/***");
 		}

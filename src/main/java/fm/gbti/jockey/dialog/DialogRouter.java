@@ -38,6 +38,9 @@ import java.util.Optional;
  */
 public final class DialogRouter {
 
+	/** Shortest stream key accepted from the form; generated keys are 24 characters. */
+	private static final int MIN_NEW_STREAM_KEY_LENGTH = 16;
+
 	/** Entry point. {@code id} namespace has already been checked by the mixin. */
 	public static void handle(ServerPlayer player, Identifier id, Optional<Tag> payload) {
 		if (!hasAdminPermission(player)) {
@@ -367,6 +370,15 @@ public final class DialogRouter {
 			String key = tag.getStringOr("stream_key", "");
 			// Blank on edit keeps the stored secret; never echoed back to the client.
 			def.streamKey = (edit && key.isBlank()) ? existing.streamKey : key;
+			// Only a newly entered key is held to the minimum. validate() also runs on load,
+			// so tightening it there would silently drop discs saved with a shorter key.
+			if (!key.isBlank() && key.length() < MIN_NEW_STREAM_KEY_LENGTH) {
+				DialogScreens.send(player, JockeyRadioDialogs.errorThenForm("Could not save disc",
+						"The stream key must be at least " + MIN_NEW_STREAM_KEY_LENGTH
+								+ " characters. Keep the generated key, or paste a long random one.",
+						tag.copy()));
+				return;
+			}
 			String bindFallback = edit
 					? DiscRegistry.get().get(editId)
 							.map(existingDisc -> existingDisc.rtmpBind)

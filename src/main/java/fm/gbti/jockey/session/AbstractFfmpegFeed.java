@@ -392,6 +392,8 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	protected static final class StderrDrain {
 		final AtomicBoolean sawIdle = new AtomicBoolean();
 		final AtomicBoolean sawFatal = new AtomicBoolean();
+		/** Set by {@link #isRejectStderr}: this connection's audio must never be offered. */
+		final AtomicBoolean sawRejected = new AtomicBoolean();
 		final CountDownLatch done = new CountDownLatch(1);
 	}
 
@@ -607,6 +609,26 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 */
 	protected boolean isFatalStderr(String line) {
 		return false;
+	}
+
+	/**
+	 * True when this stderr line means the connection must be refused: the drainer kills
+	 * the child at once and no frame from the connection is offered. Used for checks
+	 * ffmpeg only warns about, such as an RTMP publisher using the wrong stream key.
+	 * Default never rejects.
+	 */
+	protected boolean isRejectStderr(String line) {
+		return false;
+	}
+
+	/**
+	 * How long a connection's first frame is held before any audio from it is offered,
+	 * so a rejection logged before decoding starts is always seen first. ffmpeg writes
+	 * such a line during the handshake, before it produces PCM, so the hold only has to
+	 * cover the drainer thread being scheduled. Default 0 (no hold).
+	 */
+	protected long admissionDelayMillis() {
+		return 0L;
 	}
 
 	/**
@@ -1055,7 +1077,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				process = p;
 				drain = startStderrDrainer(p);
 				afterSpawn();
-				long[] frameTimes = readFrames(p);
+				long[] frameTimes = readFrames(p, drain);
 				firstFrameNanos = frameTimes[0];
 				lastFrameNanos = frameTimes[1];
 				reason = classifyEnd(p);
@@ -1140,10 +1162,10 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 
 	/**
 	 * Reads full 1920-byte frames from ffmpeg stdout into the ring buffer until
-	 * EOF, error or stop. Returns {@code [firstFrameNanos, lastFrameNanos]}
-	 * ({@code -1} when no frame arrived).
+	 * EOF, error, stop or rejection. Returns {@code [firstFrameNanos, lastFrameNanos]}
+	 * ({@code -1} when no frame was admitted).
 	 */
-	private long[] readFrames(Process p) {
+	private long[] readFrames(Process p, StderrDrain drain) {
 		byte[] raw = new byte[FRAME_BYTES];
 		long firstFrameNanos = -1L;
 		long lastFrameNanos = -1L;
@@ -1153,6 +1175,12 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				int n = in.readNBytes(raw, 0, FRAME_BYTES);
 				if (n < FRAME_BYTES) {
 					break; // EOF (any partial trailing frame is discarded)
+				}
+				if (firstFrameNanos < 0 && !holdForAdmission()) {
+					break;
+				}
+				if (drain.sawRejected.get()) {
+					break; // refused by the stderr drainer; none of its audio is offered
 				}
 				short[] frame = new short[FRAME_SAMPLES];
 				ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(frame);
@@ -1172,6 +1200,21 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			}
 		}
 		return new long[] {firstFrameNanos, lastFrameNanos};
+	}
+
+	/** Waits {@link #admissionDelayMillis()}; false when interrupted (stop). */
+	private boolean holdForAdmission() {
+		long delay = admissionDelayMillis();
+		if (delay <= 0L) {
+			return true;
+		}
+		try {
+			Thread.sleep(delay);
+			return true;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
+		}
 	}
 
 	/** After stdout ended: {@code exit} if the process is (about to be) dead, else {@code eof}. */
@@ -1287,6 +1330,12 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				}
 				if (isFatalStderr(line)) {
 					drain.sawFatal.set(true);
+				}
+				if (isRejectStderr(line) && drain.sawRejected.compareAndSet(false, true)) {
+					JockeyRadioMod.LOGGER.warn("[jockey] feed rejected a connection station={}: {}",
+							stationKey, sanitize(line));
+					// Non-blocking: the ingest thread's finally still runs the graceful destroy.
+					p.destroyForcibly();
 				}
 				recordStderr(line);
 			}
