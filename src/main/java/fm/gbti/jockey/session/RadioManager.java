@@ -4,6 +4,7 @@ import fm.gbti.jockey.JockeyRadioMod;
 import fm.gbti.jockey.config.RadioConfig;
 import fm.gbti.jockey.disc.DiscDefinition;
 import fm.gbti.jockey.disc.DiscRegistry;
+import fm.gbti.jockey.disc.PlatformPolicy;
 import fm.gbti.jockey.disc.RadioDiscFactory;
 import fm.gbti.jockey.voicechat.VoiceChatBridge;
 import net.minecraft.core.BlockPos;
@@ -527,6 +528,11 @@ public final class RadioManager {
 										+ "Set enablePlatformLinks=true in jockey_radio.json to enable them - "
 										+ "doing so is an explicit acceptance that you have the rights to "
 										+ "rebroadcast the linked content on your server.", discId);
+						yield new StubStationFeed(discId);
+					}
+					if (PlatformPolicy.isRefused(def.streamUrl)) {
+						JockeyRadioMod.LOGGER.warn("[jockey] platform disc '{}' not started: {} Edit or delete the disc.",
+								discId, PlatformPolicy.REFUSED_MESSAGE);
 						yield new StubStationFeed(discId);
 					}
 					yield new LinkResolvedFeed(discId, StationEndpoints.forDiscResolved(def, config),

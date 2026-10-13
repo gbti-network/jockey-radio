@@ -215,6 +215,7 @@ public final class RadioConfig {
 	 *       from a logged-in browser).</li>
 	 *   <li>Route through a residential IP: {@code ["--proxy", "http://user:pass@host:port"]}.</li>
 	 * </ul>
+	 * YouTube stays off whatever is passed here (see {@code PlatformPolicy}).
 	 * The bundled deno JS runtime is wired up automatically (on yt-dlp's PATH), so you do not need to
 	 * pass {@code --js-runtimes} for that. Only consulted by PLATFORM discs.
 	 */

@@ -145,7 +145,7 @@ tasks.named('test', Test) {
 
 // Platform-connector integrity check (sow-007/sow-013). Runs the REAL yt-dlp against one known URL
 // per platform and asserts it still resolves to a format ffmpeg can demux. This is what detects
-// "YouTube changed its framework" - it is EXPECTED to break over time, which is why it is opt-in and
+// "a platform changed its framework" - it is EXPECTED to break over time, which is why it is opt-in and
 // never part of `build`.
 //
 //   ./gradlew connectorCheck                       # uses yt-dlp from PATH

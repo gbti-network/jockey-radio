@@ -6,6 +6,7 @@ import fm.gbti.jockey.disc.DiscDefinition;
 import fm.gbti.jockey.disc.DiscRegistry;
 import fm.gbti.jockey.disc.LocalAudioServer;
 import fm.gbti.jockey.disc.NameStyler;
+import fm.gbti.jockey.disc.PlatformPolicy;
 import fm.gbti.jockey.disc.RadioDiscFactory;
 import fm.gbti.jockey.session.FeedRegistry;
 import fm.gbti.jockey.session.MonitorService;
@@ -399,6 +400,11 @@ public final class DialogRouter {
 			def.sourceType = DiscDefinition.SourceType.PLATFORM;
 			String streamUrl = tag.getStringOr("stream_url", "");
 			def.streamUrl = streamUrl.isBlank() ? null : streamUrl;
+			if (PlatformPolicy.isRefused(def.streamUrl)) {
+				DialogScreens.send(player, JockeyRadioDialogs.errorThenForm("Could not save disc",
+						PlatformPolicy.REFUSED_MESSAGE + " Use another source.", tag.copy()));
+				return;
+			}
 		} else if ("hls_pull".equals(source)) {
 			def.sourceType = DiscDefinition.SourceType.HLS_PULL;
 			String streamUrl = tag.getStringOr("stream_url", "");

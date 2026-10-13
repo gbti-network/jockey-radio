@@ -1,5 +1,6 @@
 package fm.gbti.jockey.session;
 
+import fm.gbti.jockey.disc.PlatformPolicy;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -108,6 +109,9 @@ public final class YtDlpResolve {
 				}
 			}
 		}
+		// After the operator's extra args: YouTube stays off even if they pass --use-extractors.
+		a.add("--use-extractors");
+		a.add(PlatformPolicy.YTDLP_EXTRACTORS);
 		a.add("--");
 		a.add(pageUrl);
 		return a.toArray(new String[0]);

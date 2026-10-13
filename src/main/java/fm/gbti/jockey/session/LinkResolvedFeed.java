@@ -106,8 +106,8 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 			// arguments (format selector, printed fields, extra args, trailing "--") are pinned by
 			// unit tests. redirectErrorStream folds yt-dlp's stderr INTO stdout: the prefix parser
 			// ignores non-prefix lines, and on failure we keep the tail as the real reason (so a
-			// "Sign in to confirm you're not a bot" / JS-runtime error reaches the operator's log
-			// instead of a bare "exit=1"). One merged stream also means no second pipe to drain.
+			// platform's bot check or geo-block message reaches the operator's log instead of a
+			// bare "exit=1"). One merged stream also means no second pipe to drain.
 			ProcessBuilder pb = new ProcessBuilder(YtDlpResolve.argv(ytdlpBinary, pageUrl, ytdlpExtraArgs))
 					.redirectErrorStream(true);
 			if (ytdlpBinDir != null) {
