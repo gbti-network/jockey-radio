@@ -38,8 +38,8 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 - **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat) (server side) is required**.
   It is how the audio reaches players.
 - **ffmpeg** (and **yt-dlp** for platform links). On linux/amd64 and windows/amd64 these are
-  **bundled in the jar** and self-extract on first run (about 185 MB into the config dir); on other
-  platforms put `ffmpeg` on the `PATH` or set `ffmpegBinary`.
+  **bundled in the jar** and self-extract on first run (about 183 MB on Linux and 152 MB on Windows,
+  into the config dir); on other platforms put `ffmpeg` on the `PATH` or set `ffmpegBinary`.
 
 **To listen:** Fabric Loader + Fabric API + the Simple Voice Chat client. The Jockey Radio jar is
 **not** required on the client.
