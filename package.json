@@ -13,6 +13,7 @@
     "panel": "python3 tools/server-panel/panel.py",
     "doctor": "python3 tools/server-panel/panel.py --doctor",
     "setup": "python3 tools/server-panel/panel.py --setup",
+    "zero-touch": "bash tools/zero-touch-check.sh",
     "server:start": "curl -s -X POST http://127.0.0.1:8750/start && echo",
     "server:stop": "curl -s -X POST http://127.0.0.1:8750/stop && echo",
     "server:restart": "curl -s -X POST http://127.0.0.1:8750/restart && echo",
