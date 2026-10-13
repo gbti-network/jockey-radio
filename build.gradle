@@ -111,6 +111,12 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.encoding = 'UTF-8'
 }
 
+// Tests run from build/ so the logger's logs/ folder never lands in the repository root.
+tasks.withType(Test).configureEach {
+	workingDir = layout.buildDirectory.dir('test-work').get().asFile
+	doFirst { workingDir.mkdirs() }
+}
+
 // Fast, offline unit tests. The live connector checks are tagged "connector" and excluded here
 // so a normal build never depends on the network or on yt-dlp being installed.
 tasks.named('test', Test) {
