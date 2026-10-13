@@ -1,38 +1,49 @@
 @echo off
 REM ============================================================================
-REM Run the Jockey Radio Minecraft server on WINDOWS-NATIVE Java 25 (off WSL).
+REM Run the Jockey Radio dev server (.server\ beside tools\) on Windows-native Java 25.
 REM
-REM WHY: the Minecraft server's audio-delivery thread must NOT run inside the WSL2
-REM guest VM, which the Windows host freezes ~815 ms every ~33 s (see the build
-REM journal). Running it here, on the Windows host, escapes that freeze -> no 30 s
-REM hitch, and the mod's `hostFreezes` counter should read 0.
+REM WHY: the audio-delivery thread must not run inside the WSL2 guest VM, which the
+REM Windows host freezes for ~815 ms every ~33 s. Run listening and soak tests here;
+REM the WSL panel (tools\server-panel) is fine for functional checks.
 REM
-REM PREREQUISITES (important, because of WSL2 mirrored networking):
-REM   1. No WSL Minecraft server may be running/holding ports 25565/24454/25575/1936.
-REM      After a WSL server has run, mirrored networking can leave a "ghost" port
-REM      reservation on the Windows side that blocks this server from binding. If
-REM      this .bat fails with "FAILED TO BIND / Address already in use", run
-REM          wsl --shutdown
-REM      from a Windows terminal (this clears the ghost but ALSO restarts your whole
-REM      WSL, incl. the SavePoint stack), then bring SavePoint back up and re-run this.
-REM   2. SavePoint (its RTMP push to 127.0.0.1:1936 / HLS) must be reachable. With
-REM      mirrored networking, localhost is shared, so a WSL SavePoint reaches this
-REM      Windows server on 127.0.0.1 - verify audio connects after launch.
+REM PREREQUISITES:
+REM   1. No WSL Minecraft server may hold the same ports: server-port and rcon.port in
+REM      .server\server.properties, port in .server\config\voicechat\
+REM      voicechat-server.properties, and every RTMP disc port. With mirrored
+REM      networking, a WSL server that has exited can leave a stale reservation on
+REM      the Windows side. If this fails with "FAILED TO BIND" or "Address already
+REM      in use", move those ports. Do not restart WSL to clear it: that stops
+REM      SavePoint and every other WSL service.
+REM   2. A local SavePoint (HLS on 127.0.0.1:7101, RTMP push to a disc's port) is
+REM      reachable on 127.0.0.1 through mirrored networking.
 REM
-REM Java: uses the Zulu 25 JRE that Modrinth downloaded for 26.2.
+REM Java: set JOCKEY_JAVA to a Windows Java 25 java.exe, or keep the default, the
+REM Zulu 25 JRE the Modrinth App downloads for 26.2.
 REM ============================================================================
 setlocal
-set "JAVA=%APPDATA%\ModrinthApp\meta\java_versions\zulu25.34.17-ca-jre25.0.3-win_x64\bin\java.exe"
+if defined JOCKEY_JAVA (
+  set "JAVA=%JOCKEY_JAVA%"
+) else (
+  set "JAVA=%APPDATA%\ModrinthApp\meta\java_versions\zulu25.34.17-ca-jre25.0.3-win_x64\bin\java.exe"
+)
 if not exist "%JAVA%" (
-  echo Zulu 25 JRE not found at "%JAVA%".
-  echo Adjust JAVA in this script to a Windows Java 25 install.
+  echo Java 25 not found at "%JAVA%".
+  echo Set JOCKEY_JAVA to a Windows Java 25 java.exe.
   pause
   exit /b 1
 )
-cd /d "D:\_Outfits\GBTI\Repos\minecraft-savepoint-radio\.server"
-echo Starting self-healing RTMP relay (local test harness)...
-start "Jockey RTMP Relay" /min cmd /c "D:\_Outfits\GBTI\Repos\minecraft-savepoint-radio\.server\rtmp-relay.bat"
-echo Launching Jockey Radio server on Windows-native Java 25 ...
+set "SERVER_DIR=%~dp0..\.server"
+if not exist "%SERVER_DIR%\fabric-server-launch.jar" (
+  echo No dev server at "%SERVER_DIR%". Run "python3 tools/server-panel/panel.py --setup" in WSL first.
+  pause
+  exit /b 1
+)
+cd /d "%SERVER_DIR%"
+if exist rtmp-relay.bat (
+  echo Starting the local RTMP relay test harness...
+  start "Jockey RTMP Relay" /min cmd /c "%SERVER_DIR%\rtmp-relay.bat"
+)
+echo Launching the Jockey Radio dev server on Windows-native Java 25 ...
 "%JAVA%" -Xms1G -Xmx2G -jar fabric-server-launch.jar nogui
 echo.
 echo Server exited. Press a key to close.
