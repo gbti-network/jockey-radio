@@ -119,6 +119,9 @@ tasks.withType(JavaCompile).configureEach {
 tasks.withType(Test).configureEach {
 	workingDir = layout.buildDirectory.dir('test-work').get().asFile
 	doFirst { workingDir.mkdirs() }
+	// LangFileTest reads the sources to compare Lang.tr fallbacks with en_us.json.
+	systemProperty 'jockey.sourceDir', file('src/main/java').absolutePath
+	inputs.dir('src/main/java')
 }
 
 // Fast, offline unit tests. The live connector checks are tagged "connector" and excluded here

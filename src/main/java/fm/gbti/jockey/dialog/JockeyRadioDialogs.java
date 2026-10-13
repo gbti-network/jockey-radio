@@ -307,7 +307,7 @@ public final class JockeyRadioDialogs {
 				edit ? "manage" : "new_disc", 150));
 		CommonDialogData common = commonNone(edit
 				? brandTitle(Lang.tr("jockey_radio.form.pull.title_edit", "Edit stream disc"))
-				: Lang.tr("jockey_radio.form.pull.title_create", "New HLS disc"), body, inputs);
+				: Lang.tr("jockey_radio.form.pull.title_create", "New stream disc"), body, inputs);
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
 	}
 
@@ -795,7 +795,7 @@ public final class JockeyRadioDialogs {
 		additions.putString("disc_id", def.discId);
 		additions.putString("ret", "detail");
 		ActionButton give = new ActionButton(
-				new CommonButtonData(Lang.tr("jockey_radio.button.give", "Give disc"),
+				new CommonButtonData(Lang.tr("jockey_radio.button.give_disc", "Give disc"),
 						Optional.of(Lang.tr("jockey_radio.give.tip", "Give to yourself, or the named player")), 220),
 				Optional.of(new CustomAll(id("give"), Optional.of(additions))));
 		ActionButton back = navIdButton(Lang.tr("jockey_radio.button.back", "Back"), "detail", def.discId, 220);
