@@ -17,7 +17,7 @@ The Minecraft server needs:
 - Operator access to `/jockey`.
 
 Keep access tokens and RTMP stream keys private. They belong only in server configuration and
-SavePoint settings—never in a public screenshot, chat message, item, or documentation.
+SavePoint settings, never in a public screenshot, chat message, item, or documentation.
 
 ## Option 1: HLS pull (recommended starting point)
 
@@ -126,7 +126,7 @@ For cleaner copyable connection details, set this in `config/jockey_radio.json`:
 }
 ```
 
-`rtmpPublicHost` is a bare hostname—do not include `rtmp://` or `/live`. Jockey Radio appends each
+`rtmpPublicHost` is a bare hostname. Do not include `rtmp://` or `/live`. Jockey Radio appends each
 disc's allocated port. A `host:port` value is supported for a single fixed-port deployment, but it
 would override the displayed port for every RTMP disc. This setting controls the external address
 shown by Jockey Radio; the disc's `0.0.0.0` bind is what actually accepts remote traffic.

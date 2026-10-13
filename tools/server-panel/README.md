@@ -1,4 +1,4 @@
-# Jockey Radio - Dev Server Panel (sow-003)
+# Jockey Radio Dev Server Panel (sow-003)
 
 A single-file, stdlib-only Python web panel for running a local Minecraft Fabric
 dedicated server during mod development. It lives entirely under
@@ -30,7 +30,7 @@ python3 panel.py --setup    # create .server/, .server/mods/, download the Fabri
 python3 panel.py            # run the panel
 ```
 
-Then open <http://127.0.0.1:8750> - from the Windows browser is fine, WSL2
+Then open <http://127.0.0.1:8750>. The Windows browser is fine, because WSL2
 forwards localhost automatically.
 
 ## EULA
@@ -55,14 +55,14 @@ built jar into `.server/mods/` by hand.
 ## Security
 
 The panel binds to `127.0.0.1` only (hard-coded, not configurable) and has no
-authentication. It is a local dev tool - do not port-forward or expose it.
+authentication. It is a local dev tool; do not port-forward or expose it.
 
 Two browser-level guards protect the localhost-only bind:
 
 - Every request must carry a `Host` header of exactly `127.0.0.1:8750` or
   `localhost:8750` (DNS-rebinding protection).
 - POST requests with an `Origin` header must match
-  `http://127.0.0.1:8750` / `http://localhost:8750` (CSRF protection -
+  `http://127.0.0.1:8750` / `http://localhost:8750` (CSRF protection, so
   a malicious web page cannot drive `/start`, `/stop`, or `/accept-eula`).
   Requests without an `Origin` header (curl, scripts) are allowed.
 

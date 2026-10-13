@@ -35,8 +35,8 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 
 **Server**
 - **Java 25**, **Fabric Loader 0.19.3+**, and **Fabric API** (`0.155.2+26.2` target).
-- **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat) (server side) is required** -
-  it is how the audio reaches players.
+- **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat) (server side) is required**.
+  It is how the audio reaches players.
 - **ffmpeg** (and **yt-dlp** for platform links). On linux/amd64 and windows/amd64 these are
   **bundled in the jar** and self-extract on first run (about 185 MB into the config dir); on other
   platforms put `ffmpeg` on the `PATH` or set `ffmpegBinary`.
@@ -58,8 +58,8 @@ background music automatically from the server while a player is near an active 
 
 ## Disc sources (and what each gives you)
 
-Every disc is one of four source types. The player-facing experience is identical - a disc in a
-jukebox - but the audio behind it differs:
+Every disc is one of four source types. The player-facing experience is identical (a disc in a
+jukebox), but the audio behind it differs:
 
 ### Live radio / HLS (SavePoint stations and any HLS)
 Streams an HLS playlist and decodes it live. This is the **SavePoint station** path
@@ -71,11 +71,11 @@ shows **on air / off air** so listeners can tell a live channel from a silent on
 ### RTMP receive (push a broadcast in)
 The mod runs an ffmpeg RTMP listener; a broadcaster (OBS, a relay, a DJ rig) publishes into it.
 One publisher, one port per disc, and a **stream key** gates who may push (never logged, never in
-item NBT). Do **not** use port 1935 on a SavePoint host - the mod rejects it and 1936 is the
+item NBT). Do **not** use port 1935 on a SavePoint host. The mod rejects it, and 1936 is the
 known-free port.
 
 ### File / direct URL (looping)
-A direct audio URL or a file dropped in `config/jockey_radio/audio/`, served locally and looped -
+A direct audio URL or a file dropped in `config/jockey_radio/audio/`, served locally and looped:
 ambient beds, event music, a fixed track. A file plays continuously rather than showing live/idle.
 
 ### Platform links (opt-in, off by default)
@@ -95,7 +95,7 @@ the link to yt-dlp); support and reliability vary by site, and some block datace
 ## Admin commands
 
 Run **`/jockey`** (op level 3 by default; the gate is re-checked on every dialog submit) to open a
-vanilla dialog UI - create, browse, edit, **test**, give, and delete discs, no client mod needed.
+vanilla dialog UI where you create, browse, edit, **test**, give and delete discs, with no client mod needed.
 Everything is also available as a subcommand:
 
 | Command | Purpose |
