@@ -7,6 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
@@ -18,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * sow-009 (P3): a tiny loopback-only, read-only HTTP server that exposes the audio
@@ -45,6 +48,8 @@ public final class LocalAudioServer {
 
 	private volatile HttpServer server;
 	private volatile int port;
+	/** A URL this server hands out: group 1 is the port, group 2 the {@code /audio/...} path. */
+	private static final Pattern LOCAL_AUDIO_URL = Pattern.compile("http://127\\.0\\.0\\.1:(\\d{1,5})(/audio/.+)");
 	private volatile Path audioRoot;
 
 	private LocalAudioServer() {
@@ -78,8 +83,16 @@ public final class LocalAudioServer {
 			Path dir = audioDir();
 			Files.createDirectories(dir);
 			this.audioRoot = dir.toRealPath();
-			HttpServer s = HttpServer.create(
-					new InetSocketAddress(InetAddress.getLoopbackAddress(), configuredPort), 0);
+			HttpServer s;
+			try {
+				s = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), configuredPort), 0);
+			} catch (BindException busy) {
+				// A busy port must not disable every file disc for the whole run. Saved disc URLs
+				// carry the old port; retarget() points them at whichever port is live.
+				s = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+				JockeyRadioMod.LOGGER.warn("[jockey] local audio port {} is in use; serving file discs on 127.0.0.1:{} instead",
+						configuredPort, s.getAddress().getPort());
+			}
 			s.createContext("/audio/", this::handle);
 			// A cached pool, NOT a fixed one. Every request here is a long-lived streaming
 			// response: FileLoopFeed passes ffmpeg -re, so the handler blocks inside write()
@@ -142,6 +155,26 @@ public final class LocalAudioServer {
 		} catch (Throwable t) {
 			return List.of();
 		}
+	}
+
+	/**
+	 * A URL saved for this server, moved to the port it is serving on now; any other URL is
+	 * returned unchanged. File discs store {@code http://127.0.0.1:<port>/audio/<file>}, and the
+	 * port can change (a busy configured port, or the operator changing it).
+	 */
+	public String retarget(String url) {
+		return retarget(url, port);
+	}
+
+	static String retarget(String url, int livePort) {
+		if (url == null || livePort <= 0) {
+			return url;
+		}
+		Matcher m = LOCAL_AUDIO_URL.matcher(url);
+		if (!m.matches() || Integer.parseInt(m.group(1)) == livePort) {
+			return url;
+		}
+		return "http://127.0.0.1:" + livePort + m.group(2);
 	}
 
 	/** The internal http URL for a folder file, or {@code null} if the server is off. */

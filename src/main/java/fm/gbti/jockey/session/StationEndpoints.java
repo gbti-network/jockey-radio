@@ -2,6 +2,7 @@ package fm.gbti.jockey.session;
 
 import fm.gbti.jockey.config.RadioConfig;
 import fm.gbti.jockey.disc.DiscDefinition;
+import fm.gbti.jockey.disc.LocalAudioServer;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -46,7 +47,9 @@ public final class StationEndpoints {
 	 */
 	public static Endpoint forDiscResolved(DiscDefinition def, RadioConfig config) {
 		if (def.streamUrl != null) {
-			return forUrl(def.streamUrl, def.token);
+			// A file-folder disc's saved URL names the local audio server's port at the time it
+			// was created; retarget it at the port that server is actually on now.
+			return forUrl(LocalAudioServer.get().retarget(def.streamUrl), def.token);
 		}
 		return forDisc(def, config);
 	}

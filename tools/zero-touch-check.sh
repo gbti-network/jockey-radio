@@ -23,6 +23,7 @@ WORK="${TMPDIR:-/tmp}/jockey-zero-touch"
 BIN="$WORK/config/jockey_radio/bin"
 SERVER_PORT=25587
 VOICE_PORT=24467
+AUDIO_PORT=24472
 BOOT_TIMEOUT_SECONDS=300
 
 JAR="${1:-$(ls -t "$REPO"/build/libs/jockey-radio-*.jar 2>/dev/null | grep -v -- '-sources' | head -n 1 || true)}"
@@ -45,6 +46,10 @@ cp "$SRC"/mods/fabric-api-*.jar "$SRC"/mods/voicechat-*.jar "$JAR" "$WORK/mods/"
 printf 'server-port=%s\nenable-rcon=false\nlevel-type=minecraft\\:flat\nmotd=jockey zero-touch check\n' \
 	"$SERVER_PORT" > "$WORK/server.properties"
 echo "port=$VOICE_PORT" > "$WORK/config/voicechat/voicechat-server.properties"
+# Keep the local audio server off the dev server's port (24462): with WSL mirrored networking a
+# WSL listener that just exited can briefly block the same port for a Windows server.
+printf '{\n  "localAudioServerPort": %s,\n  "useBundledBinaries": true,\n  "ffmpegBinary": "ffmpeg"\n}\n' \
+	"$AUDIO_PORT" > "$WORK/config/jockey_radio.json"
 
 # Boots the server with an empty environment, waits for "Done (", then sends "stop".
 boot() {
