@@ -4,11 +4,12 @@
 # Boots a throwaway Fabric server holding only the jar under test, Fabric API and Simple
 # Voice Chat, on WSL's own Linux filesystem (DrvFs under /mnt marks every file executable,
 # which would make the permission checks meaningless), with an empty PATH so no host
-# ffmpeg or yt-dlp can be found. Three boots:
+# ffmpeg or yt-dlp can be found. Four boots:
 #
 #   fresh     the bundled ffmpeg, yt-dlp and deno self-extract, owner-only, and run
 #   reboot    the version marker is current, so nothing is extracted again
 #   disabled  useBundledBinaries=false: ffmpeg is reported missing and the server still starts
+#   stale     ffmpegBinary names a path that no longer exists: the bundled copy is used instead
 #
 # Usage: tools/zero-touch-check.sh [path/to/jockey-radio.jar]   (default: newest build/libs jar)
 # Reuses .server/ for the launcher, the vanilla server jar, libraries and the EULA you
@@ -114,6 +115,15 @@ boot disabled
 check "server reached ready" logged disabled 'Done ('
 check "ffmpeg reported missing (empty PATH)" logged disabled 'host ffmpeg=missing'
 check "no crash reports" no_crash_reports
+
+echo "boot 4: stale configured path"
+sed -i -e 's/"useBundledBinaries": false/"useBundledBinaries": true/' \
+	-e 's#"ffmpegBinary": "[^"]*"#"ffmpegBinary": "D:/moved-away/ffmpeg.exe"#' "$CONFIG" 2>/dev/null || true
+boot stale
+check "server reached ready" logged stale 'Done ('
+check "missing configured path falls back to the bundled copy" \
+	logged stale "configured ffmpegBinary 'D:/moved-away/ffmpeg.exe' does not exist - using the bundled copy"
+check "ffmpeg not reported missing" bash -c "! grep -qF 'host ffmpeg=missing' '$WORK/boot-stale.log'"
 
 echo "zero-touch: $passed passed, $failed failed"
 if (( failed > 0 )); then
