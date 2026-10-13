@@ -60,7 +60,7 @@ public final class JockeyRadioMod implements ModInitializer {
 					+ "to rebroadcast any third-party content you link on this server.");
 		} else {
 			LOGGER.info("[jockey] platform links are disabled (default). Set enablePlatformLinks=true in "
-					+ "jockey_radio.json to enable SoundCloud/Mixcloud/Bandcamp/Twitch/Kick discs.");
+					+ "jockey_radio.json to enable platform-link discs.");
 		}
 		// Report what this host actually permits (process spawning / executing a binary we place on
 		// disk / whether ffmpeg is present). On a managed host with no shell this log is the only way

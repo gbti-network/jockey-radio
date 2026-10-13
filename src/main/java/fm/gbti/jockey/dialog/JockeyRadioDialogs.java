@@ -222,7 +222,7 @@ public final class JockeyRadioDialogs {
 		boolean platformEnabled = RadioConfig.get().enablePlatformLinks;
 		if (platformEnabled) {
 			actions.add(navButton(platform, Lang.tr("jockey_radio.source.platform_tip",
-					"Paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link (resolved via yt-dlp)"),
+					"Paste a page link (resolved via yt-dlp)"),
 					"create_platform", 260));
 		}
 		// sow-014: top-level surfaces close rather than bounce back to the hub.
@@ -230,11 +230,6 @@ public final class JockeyRadioDialogs {
 
 		List<DialogBody> body = new ArrayList<>();
 		body.add(body(Lang.tr("jockey_radio.source.body", "Where does this disc's audio come from?")));
-		if (!platformEnabled) {
-			body.add(body(note("Platform links (SoundCloud / Mixcloud / Bandcamp / Twitch / …) are disabled. "
-					+ "Enable enablePlatformLinks in jockey_radio.json only if you have the rights "
-					+ "to rebroadcast that content on your server.")));
-		}
 		CommonDialogData common = commonNone(Lang.tr("jockey_radio.source.title", "New disc"),
 				body, List.of());
 		return new MultiActionDialog(common, actions, Optional.empty(), 1);
@@ -426,7 +421,7 @@ public final class JockeyRadioDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this platform-link disc."))
 				: body(Lang.tr("jockey_radio.form.platform.body_create",
-						"New platform disc - paste a SoundCloud / Mixcloud / Bandcamp / Twitch / Kick link; yt-dlp resolves it to audio.")));
+						"New platform disc. Paste a page link and yt-dlp resolves it to audio. YouTube links are not supported.")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
@@ -440,7 +435,7 @@ public final class JockeyRadioDialogs {
 		inputs.add(new Input("radius_blocks",
 				radiusInput(values.map(d -> d.radiusBlocks).orElse(DiscDefinition.DEFAULT_RADIUS_BLOCKS))));
 		inputs.add(new Input("stream_url",
-				text(Lang.tr("jockey_radio.input.platform_url", "Platform link (SoundCloud / Mixcloud / Twitch / ...)"),
+				text(Lang.tr("jockey_radio.input.platform_url", "Platform link (page URL)"),
 						pick(values, d -> d.streamUrl, ""), 512)));
 		// sow-012: a non-live VOD (e.g. a SoundCloud track) with repeat off plays once and stops; a live
 		// stream (Twitch/Kick) keeps going regardless of this.

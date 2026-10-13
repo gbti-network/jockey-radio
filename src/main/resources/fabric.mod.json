@@ -3,7 +3,7 @@
 	"id": "jockey_radio",
 	"version": "${version}",
 	"name": "Jockey Radio",
-	"description": "Turn any Minecraft jukebox into a live broadcasting endpoint. Play internet radio, livestreams, SoundCloud/Mixcloud, direct audio URLs, and uploaded files through music discs as positional Simple Voice Chat audio. Server-side; with native SavePoint broadcasting integration.",
+	"description": "Turn any Minecraft jukebox into a live broadcasting endpoint. Play internet radio, livestreams, direct audio URLs and uploaded files through music discs as positional Simple Voice Chat audio. Server-side, with native SavePoint broadcasting integration.",
 	"authors": [
 		"GBTI"
 	],
