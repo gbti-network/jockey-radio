@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
@@ -14,30 +15,31 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Ships ffmpeg and yt-dlp INSIDE the jar and installs them on first run, so a
- * managed-host operator can drop the mod into {@code mods/} and have working audio with no
- * shell, no PATH, and no manual binary upload.
+ * Ships ffmpeg, yt-dlp and deno INSIDE the jar and installs them on first run, so an
+ * operator can drop the mod into {@code mods/} and have working audio with no shell, no
+ * PATH, and no manual binary upload.
  *
  * <p><b>Why.</b> The proven deployment target (Modrinth Servers, Pterodactyl panels) gives a
  * file-upload panel and nothing else. A bare {@code ffmpeg}/{@code yt-dlp} on PATH does not
  * exist there. The {@link HostCapabilityProbe} already confirmed such hosts CAN execute a
  * binary we place on disk (verdict: {@code extracted-binary-executable=YES}); this class is
- * what places it.</p>
+ * what places it. Windows self-hosters get the same drop-in behaviour.</p>
  *
- * <p><b>What it does.</b> On {@link RadioConfig#load()} it extracts the platform binary from
- * the jar to {@code <configDir>/jockey_radio/bin/}, sets the execute bit (uploads and
+ * <p><b>What it does.</b> On {@link RadioConfig#load()} it extracts this platform's binaries
+ * from the jar to {@code <configDir>/jockey_radio/bin/}, sets the execute bit (uploads and
  * extractions both land mode 644 on these hosts), and points {@link RadioConfig#ffmpegBinary}
- * / {@link RadioConfig#ytdlpBinary} at the extracted files - but ONLY when the operator left
- * them at their default bare names. An explicit path in the config is always respected, and a
- * host with a real system ffmpeg is unaffected because the config still reads {@code "ffmpeg"}
- * on disk (the override is in-memory only, so the file stays portable across machines).</p>
+ * / {@link RadioConfig#ytdlpBinary} at the extracted files when the operator left them at
+ * their default bare names. An explicit path in the config is respected while it exists; a
+ * path that no longer exists (a moved or deleted folder) falls back to the bundled copy with
+ * a warning instead of leaving every disc silent. The override is in-memory only, so the
+ * config file stays portable across machines.</p>
  *
- * <p><b>Fail-soft.</b> A thin jar (dev/CI build with no bundled binary), a non-linux/amd64
+ * <p><b>Fail-soft.</b> A thin jar (dev/CI build with no bundled binary), an unsupported
  * platform, or an extraction failure all fall back to the configured value, so nothing here
  * can prevent the server starting - the startup doctor reports the real verdict either way.</p>
  *
- * <p><b>Scope.</b> linux/amd64 only, matching the single platform proven on the managed host.
- * Other platforms fall back to a configured path or PATH.</p>
+ * <p><b>Scope.</b> linux/amd64 (the managed-host target) and windows/amd64. Other platforms
+ * use a configured path or PATH.</p>
  */
 public final class BundledBinaries {
 
@@ -45,16 +47,34 @@ public final class BundledBinaries {
 	}
 
 	/**
-	 * Identity of the bundled binary set. Bumped whenever the shipped binaries change, so a mod
-	 * upgrade re-extracts instead of running a stale copy left by a previous version.
+	 * A platform we ship binaries for: its jar resource folder, executable suffix, and the
+	 * identity of its bundled set. The identity is bumped whenever that platform's binaries
+	 * change, so a mod upgrade re-extracts instead of running a stale copy.
 	 */
-	static final String BUNDLE_VERSION = "ffmpeg-btbn-N125748+ytdlp-2026.07.04+deno-2.9.4+jockey-radio";
+	enum Platform {
+		LINUX_AMD64("linux-amd64", "", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.07.04+deno-2.9.4+jockey-radio"),
+		WINDOWS_AMD64("windows-amd64", ".exe", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.07.04+deno-2.9.4+jockey-radio");
 
-	/** Jar resource paths (absolute, from the class loader root). */
-	private static final String FFMPEG_RESOURCE = "/jockey_radio/bin/linux-amd64/ffmpeg";
-	private static final String YTDLP_RESOURCE = "/jockey_radio/bin/linux-amd64/yt-dlp";
-	/** JavaScript runtime yt-dlp uses to solve some platforms' signature challenge (optional). */
-	private static final String DENO_RESOURCE = "/jockey_radio/bin/linux-amd64/deno";
+		final String dir;
+		final String exeSuffix;
+		final String bundleVersion;
+
+		Platform(String dir, String exeSuffix, String bundleVersion) {
+			this.dir = dir;
+			this.exeSuffix = exeSuffix;
+			this.bundleVersion = bundleVersion;
+		}
+
+		/** Jar resource path (absolute, from the class loader root) of one tool. */
+		String resource(String tool) {
+			return "/jockey_radio/bin/" + dir + "/" + tool + exeSuffix;
+		}
+
+		/** On-disk file name of one tool. */
+		String fileName(String tool) {
+			return tool + exeSuffix;
+		}
+	}
 
 	/** The compiled defaults in {@link RadioConfig}; an unchanged value means "not overridden". */
 	static final String FFMPEG_DEFAULT = "ffmpeg";
@@ -70,42 +90,38 @@ public final class BundledBinaries {
 			if (!config.useBundledBinaries) {
 				return;
 			}
-			if (!isSupportedPlatform(System.getProperty("os.name"), System.getProperty("os.arch"))) {
-				return; // we ship only the linux/amd64 binary; anything else uses the configured path
+			Platform platform = platform(System.getProperty("os.name"), System.getProperty("os.arch"));
+			if (platform == null) {
+				return; // no binaries for this platform; the configured path is used
 			}
-			if (JockeyRadioMod.class.getResource(FFMPEG_RESOURCE) == null) {
+			if (JockeyRadioMod.class.getResource(platform.resource("ffmpeg")) == null) {
 				return; // a thin jar (built without .product/ binaries) - nothing to extract
 			}
 			Path binDir = configDir.resolve("jockey_radio").resolve("bin");
-			Path ffmpeg = binDir.resolve("ffmpeg");
-			Path ytdlp = binDir.resolve("yt-dlp");
+			Path ffmpeg = binDir.resolve(platform.fileName("ffmpeg"));
+			Path ytdlp = binDir.resolve(platform.fileName("yt-dlp"));
 			Path marker = binDir.resolve(".bundle-version");
 
-			if (!upToDate(marker, ffmpeg, ytdlp)) {
+			if (!upToDate(platform, marker, ffmpeg, ytdlp)) {
 				Files.createDirectories(binDir);
-				extract(FFMPEG_RESOURCE, ffmpeg);
-				extract(YTDLP_RESOURCE, ytdlp);
+				extract(platform.resource("ffmpeg"), ffmpeg);
+				extract(platform.resource("yt-dlp"), ytdlp);
 				// deno is optional (a thin/older bundle may lack it); yt-dlp uses it for the platforms
 				// that need JS. It sits in the same bin dir, which LinkResolvedFeed puts on yt-dlp's PATH.
-				boolean deno = JockeyRadioMod.class.getResource(DENO_RESOURCE) != null;
+				boolean deno = JockeyRadioMod.class.getResource(platform.resource("deno")) != null;
 				if (deno) {
-					extract(DENO_RESOURCE, binDir.resolve("deno"));
+					extract(platform.resource("deno"), binDir.resolve(platform.fileName("deno")));
 				}
 				// Marker written LAST, after every binary is in place, so a crash mid-extract
 				// leaves it stale and the next boot re-extracts rather than trusting a partial set.
-				Files.writeString(marker, BUNDLE_VERSION);
+				Files.writeString(marker, platform.bundleVersion);
 				JockeyRadioMod.LOGGER.info(
-						"[jockey] installed bundled ffmpeg + yt-dlp{} to {} ({})",
-						deno ? " + deno" : "", binDir, BUNDLE_VERSION);
+						"[jockey] installed bundled ffmpeg + yt-dlp{} to {} ({} {})",
+						deno ? " + deno" : "", binDir, platform.dir, platform.bundleVersion);
 			}
 
-			// Only override the DEFAULT bare names - an explicit operator path always wins.
-			if (FFMPEG_DEFAULT.equals(config.ffmpegBinary) && Files.isExecutable(ffmpeg)) {
-				config.ffmpegBinary = ffmpeg.toAbsolutePath().toString();
-			}
-			if (YTDLP_DEFAULT.equals(config.ytdlpBinary) && Files.isExecutable(ytdlp)) {
-				config.ytdlpBinary = ytdlp.toAbsolutePath().toString();
-			}
+			config.ffmpegBinary = preferBundled("ffmpegBinary", config.ffmpegBinary, FFMPEG_DEFAULT, ffmpeg);
+			config.ytdlpBinary = preferBundled("ytdlpBinary", config.ytdlpBinary, YTDLP_DEFAULT, ytdlp);
 		} catch (Throwable t) {
 			// Never fatal: fall back to the configured value; the startup doctor reports the verdict.
 			JockeyRadioMod.LOGGER.warn(
@@ -114,22 +130,69 @@ public final class BundledBinaries {
 		}
 	}
 
-	/** True only where we actually ship a binary: linux on amd64/x86_64. Pure, unit-tested. */
-	static boolean isSupportedPlatform(String osName, String osArch) {
+	/**
+	 * The binary to use for one config key: the bundled copy when the operator left the
+	 * default bare name, or when their explicit path no longer exists. Any other explicit
+	 * value (an existing path, or a different bare name for PATH lookup) is respected.
+	 */
+	static String preferBundled(String key, String configured, String defaultName, Path bundled) {
+		if (!Files.isExecutable(bundled)) {
+			return configured;
+		}
+		String bundledPath = bundled.toAbsolutePath().toString();
+		if (configured == null || configured.isBlank() || defaultName.equals(configured)) {
+			return bundledPath;
+		}
+		if (isMissingPath(configured)) {
+			JockeyRadioMod.LOGGER.warn("[jockey] configured {} '{}' does not exist - using the bundled copy at {}",
+					key, configured, bundledPath);
+			return bundledPath;
+		}
+		return configured;
+	}
+
+	/** True for a value that names a file path (not a bare PATH name) with nothing at it. */
+	static boolean isMissingPath(String value) {
+		if (value.indexOf('/') < 0 && value.indexOf('\\') < 0) {
+			return false; // a bare name is looked up on PATH; nothing to check here
+		}
+		try {
+			return !Files.isRegularFile(Path.of(value));
+		} catch (InvalidPathException e) {
+			return true;
+		}
+	}
+
+	/** The platform we ship binaries for on this OS/arch, or {@code null}. Pure, unit-tested. */
+	static Platform platform(String osName, String osArch) {
 		if (osName == null || osArch == null) {
-			return false;
+			return null;
 		}
 		String os = osName.toLowerCase(Locale.ROOT);
 		String arch = osArch.toLowerCase(Locale.ROOT);
-		return os.contains("linux") && (arch.equals("amd64") || arch.equals("x86_64"));
+		if (!arch.equals("amd64") && !arch.equals("x86_64")) {
+			return null;
+		}
+		if (os.contains("linux")) {
+			return Platform.LINUX_AMD64;
+		}
+		if (os.startsWith("windows")) {
+			return Platform.WINDOWS_AMD64;
+		}
+		return null;
 	}
 
-	/** Whether the extracted set is present and matches {@link #BUNDLE_VERSION}. */
-	private static boolean upToDate(Path marker, Path ffmpeg, Path ytdlp) {
+	/** True only where we actually ship binaries. */
+	static boolean isSupportedPlatform(String osName, String osArch) {
+		return platform(osName, osArch) != null;
+	}
+
+	/** Whether the extracted set is present and matches this platform's bundle identity. */
+	private static boolean upToDate(Platform platform, Path marker, Path ffmpeg, Path ytdlp) {
 		try {
 			return Files.isRegularFile(ffmpeg) && Files.isRegularFile(ytdlp)
 					&& Files.isRegularFile(marker)
-					&& BUNDLE_VERSION.equals(Files.readString(marker).trim());
+					&& platform.bundleVersion.equals(Files.readString(marker).trim());
 		} catch (IOException e) {
 			return false;
 		}
@@ -155,7 +218,7 @@ public final class BundledBinaries {
 		}
 	}
 
-	/** Sets the owner execute bit, POSIX first, falling back to the portable File API. */
+	/** Sets the owner execute bit, POSIX first, falling back to the portable File API (Windows). */
 	private static void markExecutable(Path p) {
 		try {
 			// Owner-only (0700): the server process is the only thing that runs these; there is no

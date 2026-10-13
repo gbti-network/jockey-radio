@@ -65,20 +65,24 @@ processResources {
 	}
 
 	// Bundle the platform binaries INTO the jar so a Modrinth drop-in works with no shell and
-	// no manual upload (see BundledBinaries). They live in .product/ (gitignored, ~150 MB), so
-	// they are copied at build time rather than committed. If absent, a THIN jar is built - the
-	// mod still runs and falls back to a configured/PATH ffmpeg. Keep the jar-resource names
-	// (ffmpeg / yt-dlp) in sync with BundledBinaries' resource paths.
+	// no manual upload (see BundledBinaries). They live in .product/ (gitignored, ~500 MB for the
+	// linux-amd64 and windows-amd64 sets), so they are copied at build time rather than committed.
+	// If absent, a THIN jar is built - the mod still runs and falls back to a configured/PATH
+	// ffmpeg. Keep the jar-resource names in sync with BundledBinaries.Platform.
 	def productDir = file("${rootDir}/.product")
 	def bundledFfmpeg = file("${productDir}/ffmpeg-linux-amd64-lgpl")
 	def bundledYtdlp = file("${productDir}/yt-dlp-linux")
 	def bundledDeno = file("${productDir}/deno")
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
 	def bundledLicenses = file("${productDir}/licenses")
+	// Windows/amd64 set (ffmpeg.exe, yt-dlp.exe, deno.exe), bundled alongside when present.
+	def winFfmpeg = file("${productDir}/ffmpeg-windows-amd64-lgpl.exe")
+	def winYtdlp = file("${productDir}/yt-dlp-windows.exe")
+	def winDeno = file("${productDir}/deno-windows.exe")
 	// Declare the optional product tree via inputs.files (NOT inputs.dir): inputs.files tolerates a
 	// missing path, so CI - which has no .product/ - validates and takes the thin-jar branch below,
 	// whereas inputs.dir would fail validation on the absent directory before the fallback runs.
-	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno, bundledNotice, bundledLicenses)
+	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno, winFfmpeg, winYtdlp, winDeno, bundledNotice, bundledLicenses)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
 		into('jockey_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
@@ -86,6 +90,15 @@ processResources {
 			// deno is the JS runtime yt-dlp needs for YouTube; optional (thin bundle omits it).
 			if (bundledDeno.exists()) {
 				from(bundledDeno) { rename { 'deno' } }
+			}
+		}
+		if (winFfmpeg.exists() && winYtdlp.exists()) {
+			into('jockey_radio/bin/windows-amd64') {
+				from(winFfmpeg) { rename { 'ffmpeg.exe' } }
+				from(winYtdlp) { rename { 'yt-dlp.exe' } }
+				if (winDeno.exists()) {
+					from(winDeno) { rename { 'deno.exe' } }
+				}
 			}
 		}
 		if (bundledNotice.exists()) {
@@ -97,7 +110,8 @@ processResources {
 		}
 		doLast {
 			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +
-					(bundledDeno.exists() ? ' + deno' : '') + ' into the jar.')
+					(bundledDeno.exists() ? ' + deno' : '') + ' (linux-amd64)' +
+					(winFfmpeg.exists() && winYtdlp.exists() ? ' and windows-amd64' : '') + ' into the jar.')
 		}
 	} else {
 		doLast {
