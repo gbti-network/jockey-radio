@@ -18,7 +18,14 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,10 +43,34 @@ import java.util.regex.Pattern;
  * extensions are served. Following the sow-005 networking lesson it advertises {@code 127.0.0.1},
  * never {@code localhost} (IPv4-vs-IPv6). Fully fail-safe: any startup problem logs and
  * leaves the feature disabled ({@code port()==0}); the mod runs unaffected.
+ *
+ * <p>Limits: at most {@link #MAX_REQUESTS} requests are served at once and a connection past
+ * that is closed straight away; a request must arrive in full within {@link #REQUEST_TIMEOUT_MS};
+ * a response whose reader stops reading for {@link #STALL_TIMEOUT_MS} is cut. The exchange
+ * runs on a blocking socket channel, so interrupting its thread closes that one connection.</p>
  */
 public final class LocalAudioServer {
 
-	private static final LocalAudioServer INSTANCE = new LocalAudioServer();
+	/**
+	 * Requests served at once. Each playing file disc holds one for as long as it plays (ffmpeg
+	 * reads at the media clock), and Test probes take one briefly; jukeboxes playing the same
+	 * disc share a feed, so this is a count of distinct file discs.
+	 */
+	static final int MAX_REQUESTS = 64;
+	/** A request (line and headers) must arrive in full within this long. */
+	static final long REQUEST_TIMEOUT_MS = 15_000;
+	/**
+	 * A response that writes nothing for this long is cut. ffmpeg reads a file at its bitrate,
+	 * so a {@link #CHUNK} write can legitimately wait about 16 s on an 8 kbps file.
+	 */
+	static final long STALL_TIMEOUT_MS = 120_000;
+	/** Bytes per write; small so progress is seen often on a slow reader. */
+	private static final int CHUNK = 16 * 1024;
+	/** Minimum gap between two "at its limit" or "stalled" warnings. */
+	private static final long WARN_INTERVAL_NS = TimeUnit.MINUTES.toNanos(1);
+
+	private static final LocalAudioServer INSTANCE =
+			new LocalAudioServer(MAX_REQUESTS, REQUEST_TIMEOUT_MS, STALL_TIMEOUT_MS);
 
 	private static final String DIR_NAME = "jockey_radio";
 	private static final String AUDIO_DIR = "audio";
@@ -52,7 +83,56 @@ public final class LocalAudioServer {
 	private static final Pattern LOCAL_AUDIO_URL = Pattern.compile("http://127\\.0\\.0\\.1:(\\d{1,5})(/audio/.+)");
 	private volatile Path audioRoot;
 
-	private LocalAudioServer() {
+	private final int maxRequests;
+	private final long requestTimeoutNs;
+	private final long stallTimeoutNs;
+	/** Requests on a worker thread right now, watched for the two timeouts. */
+	private final Set<Request> active = ConcurrentHashMap.newKeySet();
+	/** The {@link Request} running on the current worker thread. */
+	private final ThreadLocal<Request> current = new ThreadLocal<>();
+	private final AtomicLong lastLimitWarn = new AtomicLong(System.nanoTime() - WARN_INTERVAL_NS);
+	private final AtomicLong lastStallWarn = new AtomicLong(System.nanoTime() - WARN_INTERVAL_NS);
+	private volatile ThreadPoolExecutor workers;
+	private volatile ScheduledExecutorService watchdog;
+
+	LocalAudioServer() {
+		this(MAX_REQUESTS, REQUEST_TIMEOUT_MS, STALL_TIMEOUT_MS);
+	}
+
+	LocalAudioServer(int maxRequests, long requestTimeoutMs, long stallTimeoutMs) {
+		this.maxRequests = maxRequests;
+		this.requestTimeoutNs = TimeUnit.MILLISECONDS.toNanos(requestTimeoutMs);
+		this.stallTimeoutNs = TimeUnit.MILLISECONDS.toNanos(stallTimeoutMs);
+	}
+
+	/**
+	 * One request on a worker thread. {@link #since} is when the request started, then the
+	 * last time the response made progress; the watchdog interrupts the thread once it is
+	 * older than the timeout for its phase. The lock makes sure an interrupt never lands after
+	 * the request has finished, when the thread may already be serving another connection.
+	 */
+	private static final class Request {
+		final Thread thread = Thread.currentThread();
+		volatile long since = System.nanoTime();
+		volatile boolean responding;
+		private boolean done;
+
+		void progress() {
+			since = System.nanoTime();
+		}
+
+		synchronized void finish() {
+			done = true;
+		}
+
+		synchronized boolean cutIfOverdue(long now, long requestTimeoutNs, long stallTimeoutNs) {
+			if (done || now - since < (responding ? stallTimeoutNs : requestTimeoutNs)) {
+				return false;
+			}
+			done = true;
+			thread.interrupt();
+			return true;
+		}
 	}
 
 	public static LocalAudioServer get() {
@@ -75,12 +155,16 @@ public final class LocalAudioServer {
 	 * Never throws.
 	 */
 	public synchronized void start(int configuredPort) {
+		start(audioDir(), configuredPort);
+	}
+
+	/** {@link #start(int)} serving {@code dir}. */
+	synchronized void start(Path dir, int configuredPort) {
 		stop();
 		if (configuredPort <= 0) {
 			return;
 		}
 		try {
-			Path dir = audioDir();
 			Files.createDirectories(dir);
 			this.audioRoot = dir.toRealPath();
 			HttpServer s;
@@ -94,19 +178,32 @@ public final class LocalAudioServer {
 						configuredPort, s.getAddress().getPort());
 			}
 			s.createContext("/audio/", this::handle);
-			// A cached pool, NOT a fixed one. Every request here is a long-lived streaming
-			// response: FileLoopFeed passes ffmpeg -re, so the handler blocks inside write()
-			// at the media clock for as long as the disc plays. A fixed pool of N therefore
-			// caps CONCURRENT FILE DISCS at N, and the overflow does not fail - it sits in the
-			// executor's unbounded queue, so ffmpeg waits forever for response headers, the
-			// ingest loop never reconnects, and the disc is silent with nothing logged.
-			// One thread per playing file disc is the correct sizing, and the pool reaps
-			// idle threads after 60 s.
-			s.setExecutor(Executors.newCachedThreadPool(r -> {
-				Thread t = new Thread(r, "savepoint-audio-http");
+			// One thread per request with NO queue. Every request here is a long-lived streaming
+			// response: FileLoopFeed passes ffmpeg -re, so the handler blocks inside write() at
+			// the media clock for as long as the disc plays. A queue would let an overflow
+			// request wait forever for response headers, with the disc silent and nothing
+			// logged. Past maxRequests the executor rejects instead, the HTTP server closes that
+			// connection, and ffmpeg's reconnect ladder retries it. Idle threads go after 60 s.
+			ThreadPoolExecutor pool = new ThreadPoolExecutor(0, maxRequests, 60, TimeUnit.SECONDS,
+					new SynchronousQueue<>(), r -> {
+						Thread t = new Thread(r, "jockey-audio-http");
+						t.setDaemon(true);
+						return t;
+					}, (r, executor) -> {
+						warnAtMost(lastLimitWarn, "[jockey] local audio server is at its limit of {} requests; "
+								+ "closing a new connection", maxRequests);
+						throw new RejectedExecutionException("local audio server at its limit");
+					});
+			s.setExecutor(task -> pool.execute(() -> track(task)));
+			ScheduledExecutorService dog = Executors.newSingleThreadScheduledExecutor(r -> {
+				Thread t = new Thread(r, "jockey-audio-watchdog");
 				t.setDaemon(true);
 				return t;
-			}));
+			});
+			long periodMs = Math.max(50, TimeUnit.NANOSECONDS.toMillis(Math.min(requestTimeoutNs, stallTimeoutNs)) / 4);
+			dog.scheduleAtFixedRate(this::cutOverdue, periodMs, periodMs, TimeUnit.MILLISECONDS);
+			this.workers = pool;
+			this.watchdog = dog;
 			s.start();
 			this.server = s;
 			this.port = s.getAddress().getPort();
@@ -130,6 +227,54 @@ public final class LocalAudioServer {
 			} catch (Throwable ignored) {
 				// best-effort
 			}
+		}
+		ScheduledExecutorService dog = watchdog;
+		watchdog = null;
+		if (dog != null) {
+			dog.shutdownNow();
+		}
+		ThreadPoolExecutor pool = workers;
+		workers = null;
+		if (pool != null) {
+			// Interrupting a worker closes its connection, so a disc mid-stream ends now.
+			pool.shutdownNow();
+		}
+	}
+
+	/** Runs one HTTP exchange on a worker thread, watched for the request and stall timeouts. */
+	private void track(Runnable exchange) {
+		Request request = new Request();
+		active.add(request);
+		current.set(request);
+		try {
+			exchange.run();
+		} finally {
+			request.finish();
+			current.remove();
+			active.remove(request);
+			Thread.interrupted(); // a cut that raced the finish must not reach the next exchange
+		}
+	}
+
+	/** Interrupts every request past its timeout; the interrupt closes that connection. */
+	private void cutOverdue() {
+		long now = System.nanoTime();
+		for (Request r : active) {
+			boolean responding = r.responding;
+			if (r.cutIfOverdue(now, requestTimeoutNs, stallTimeoutNs)) {
+				warnAtMost(lastStallWarn, responding
+						? "[jockey] local audio server cut a response whose reader stopped reading for {} s"
+						: "[jockey] local audio server closed a request that did not arrive within {} s",
+						TimeUnit.NANOSECONDS.toSeconds(responding ? stallTimeoutNs : requestTimeoutNs));
+			}
+		}
+	}
+
+	private static void warnAtMost(AtomicLong last, String message, Object arg) {
+		long now = System.nanoTime();
+		long prev = last.get();
+		if (now - prev >= WARN_INTERVAL_NS && last.compareAndSet(prev, now)) {
+			JockeyRadioMod.LOGGER.warn(message, arg);
 		}
 	}
 
@@ -193,6 +338,11 @@ public final class LocalAudioServer {
 	}
 
 	private void handle(HttpExchange ex) throws IOException {
+		Request request = current.get();
+		if (request != null) {
+			request.progress();
+			request.responding = true;
+		}
 		try {
 			String method = ex.getRequestMethod();
 			boolean head = "HEAD".equalsIgnoreCase(method);
@@ -209,47 +359,33 @@ public final class LocalAudioServer {
 			ex.getResponseHeaders().set("Content-Type", contentType(file));
 			ex.getResponseHeaders().set("Accept-Ranges", "bytes");
 
-			// Minimal single-range support (ffmpeg may probe with Range: bytes=0-).
-			String range = ex.getRequestHeaders().getFirst("Range");
-			long start = 0;
-			long end = len - 1;
-			boolean partial = false;
-			if (range != null && range.startsWith("bytes=")) {
-				try {
-					String spec = range.substring(6);
-					int dash = spec.indexOf('-');
-					String a = spec.substring(0, dash);
-					String b = spec.substring(dash + 1);
-					start = a.isEmpty() ? 0 : Long.parseLong(a);
-					end = b.isEmpty() ? len - 1 : Math.min(Long.parseLong(b), len - 1);
-					if (start > end || start >= len) {
-						ex.getResponseHeaders().set("Content-Range", "bytes */" + len);
-						ex.sendResponseHeaders(416, -1);
-						return;
-					}
-					partial = true;
-				} catch (RuntimeException malformed) {
-					start = 0;
-					end = len - 1;
-					partial = false;
-				}
+			// Single-range support (ffmpeg probes with Range: bytes=0- and seeks with others).
+			ByteRange range = ByteRange.of(ex.getRequestHeaders().getFirst("Range"), len);
+			if (range.status() == 416) {
+				ex.getResponseHeaders().set("Content-Range", "bytes */" + len);
+				ex.sendResponseHeaders(416, -1);
+				return;
 			}
-			long count = end - start + 1;
-			if (partial) {
-				ex.getResponseHeaders().set("Content-Range", "bytes " + start + "-" + end + "/" + len);
+			long start = range.start();
+			long count = range.end() - start + 1;
+			if (range.status() == 206) {
+				ex.getResponseHeaders().set("Content-Range", "bytes " + start + "-" + range.end() + "/" + len);
 			}
-			ex.sendResponseHeaders(partial ? 206 : 200, head ? -1 : count);
+			ex.sendResponseHeaders(range.status(), head ? -1 : count);
 			if (head) {
 				return;
 			}
 			try (var in = Files.newInputStream(file); OutputStream out = ex.getResponseBody()) {
 				in.skipNBytes(start);
-				byte[] buf = new byte[64 * 1024];
+				byte[] buf = new byte[CHUNK];
 				long remaining = count;
 				int n;
 				while (remaining > 0 && (n = in.read(buf, 0, (int) Math.min(buf.length, remaining))) != -1) {
 					out.write(buf, 0, n);
 					remaining -= n;
+					if (request != null) {
+						request.progress();
+					}
 				}
 			}
 		} catch (Throwable t) {
@@ -260,6 +396,54 @@ public final class LocalAudioServer {
 			}
 		} finally {
 			ex.close();
+		}
+	}
+
+	/**
+	 * The response to a {@code Range} header for a file of {@code len} bytes: 200 for the whole
+	 * file, 206 for {@code start..end} (inclusive), or 416 when the range starts past the end.
+	 * Only a single range is honoured; a header this server does not understand (another unit,
+	 * several ranges, bad numbers, or end before start) is ignored, as RFC 9110 allows.
+	 */
+	record ByteRange(int status, long start, long end) {
+
+		static ByteRange of(String header, long len) {
+			ByteRange whole = new ByteRange(200, 0, len - 1);
+			ByteRange unsatisfiable = new ByteRange(416, 0, -1);
+			if (header == null || !header.startsWith("bytes=")) {
+				return whole;
+			}
+			String spec = header.substring("bytes=".length()).trim();
+			int dash = spec.indexOf('-');
+			if (dash < 0 || spec.indexOf(',') >= 0) {
+				return whole;
+			}
+			String first = spec.substring(0, dash).trim();
+			String last = spec.substring(dash + 1).trim();
+			try {
+				if (first.isEmpty()) {
+					// bytes=-N is the LAST N bytes, not the first N.
+					if (last.isEmpty()) {
+						return whole;
+					}
+					long suffix = Long.parseLong(last);
+					if (suffix <= 0 || len == 0) {
+						return unsatisfiable;
+					}
+					return new ByteRange(206, Math.max(0, len - suffix), len - 1);
+				}
+				long start = Long.parseLong(first);
+				long end = last.isEmpty() ? Long.MAX_VALUE : Long.parseLong(last);
+				if (start < 0 || end < start) {
+					return whole;
+				}
+				if (start >= len) {
+					return unsatisfiable;
+				}
+				return new ByteRange(206, start, Math.min(end, len - 1));
+			} catch (NumberFormatException malformed) {
+				return whole;
+			}
 		}
 	}
 
