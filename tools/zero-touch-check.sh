@@ -138,7 +138,7 @@ sed -i -e 's/"useBundledBinaries": false/"useBundledBinaries": true/' \
 boot stale
 check "server reached ready" logged stale 'Done ('
 check "missing configured path falls back to the bundled copy" \
-	logged stale "configured ffmpegBinary 'D:/moved-away/ffmpeg.exe' does not exist - using the bundled copy"
+	logged stale "configured ffmpegBinary 'D:/moved-away/ffmpeg.exe' does not exist; using the bundled copy"
 check "ffmpeg not reported missing" bash -c "! grep -qF 'host ffmpeg=missing' '$WORK/boot-stale.log'"
 
 echo "zero-touch: $passed passed, $failed failed"

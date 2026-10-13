@@ -56,7 +56,7 @@ public final class JockeyRadioMod implements ModInitializer {
 		// that enablePlatformLinks exists - and a gate nobody can find defeats the point of asking
 		// them to opt in deliberately.
 		if (config.enablePlatformLinks) {
-			LOGGER.warn("[jockey] platform links are ENABLED - you are responsible for holding the rights "
+			LOGGER.warn("[jockey] platform links are ENABLED; you are responsible for holding the rights "
 					+ "to rebroadcast any third-party content you link on this server.");
 		} else {
 			LOGGER.info("[jockey] platform links are disabled (default). Set enablePlatformLinks=true in "

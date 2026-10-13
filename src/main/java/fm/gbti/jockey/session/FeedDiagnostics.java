@@ -110,8 +110,8 @@ public final class FeedDiagnostics {
 			}
 			// TRUNCATE on init: one clean file per server run.
 			BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8);
-			writer.write("# Jockey Radio feed diagnostics - run start "
-					+ TIME_FORMAT.format(Instant.now()) + " - interval " + sec + "s");
+			writer.write("# Jockey Radio feed diagnostics, run start "
+					+ TIME_FORMAT.format(Instant.now()) + ", interval " + sec + "s");
 			writer.newLine();
 			writer.write(CSV_HEADER);
 			writer.newLine();

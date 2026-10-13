@@ -121,7 +121,7 @@ public final class BundledBinaries {
 		} catch (Throwable t) {
 			// Never fatal: fall back to the configured value; the startup doctor reports the verdict.
 			JockeyRadioMod.LOGGER.warn(
-					"[jockey] could not install bundled binaries - using the configured ffmpeg/yt-dlp path: {}",
+					"[jockey] could not install bundled binaries; using the configured ffmpeg/yt-dlp path: {}",
 					t.toString());
 		}
 	}
@@ -140,7 +140,7 @@ public final class BundledBinaries {
 			return bundledPath;
 		}
 		if (isMissingPath(configured)) {
-			JockeyRadioMod.LOGGER.warn("[jockey] configured {} '{}' does not exist - using the bundled copy at {}",
+			JockeyRadioMod.LOGGER.warn("[jockey] configured {} '{}' does not exist; using the bundled copy at {}",
 					key, configured, bundledPath);
 			return bundledPath;
 		}

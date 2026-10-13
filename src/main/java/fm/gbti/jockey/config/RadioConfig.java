@@ -719,7 +719,7 @@ public final class RadioConfig {
 			JockeyRadioMod.LOGGER.info("Loaded {} station(s) from {}", loaded.stations.size(), path);
 		} catch (Exception e) {
 			JockeyRadioMod.LOGGER.error(
-					"Malformed config at {} - using built-in defaults (file left untouched)", path, e);
+					"Malformed config at {}; using built-in defaults (file left untouched)", path, e);
 			instance = createDefault();
 		}
 		// Install/resolve the jar-bundled binaries and point ffmpegBinary/ytdlpBinary at them
@@ -740,7 +740,7 @@ public final class RadioConfig {
 			loaded.ingest = loaded.ingest.trim().toLowerCase(Locale.ROOT);
 			if (!loaded.ingest.equals("ffmpeg") && !loaded.ingest.equals("stub")) {
 				JockeyRadioMod.LOGGER.warn(
-						"Unknown ingest '{}' in {} (expected \"ffmpeg\" or \"stub\") - using \"ffmpeg\"",
+						"Unknown ingest '{}' in {} (expected \"ffmpeg\" or \"stub\"); using \"ffmpeg\"",
 						loaded.ingest, FILE_NAME);
 				loaded.ingest = "ffmpeg";
 			}
@@ -750,13 +750,13 @@ public final class RadioConfig {
 		}
 		if (loaded.bufferFrames < 5 || loaded.bufferFrames > 3000) {
 			JockeyRadioMod.LOGGER.warn(
-					"bufferFrames {} in {} is outside 5..3000 - using default 600",
+					"bufferFrames {} in {} is outside 5..3000; using default 600",
 					loaded.bufferFrames, FILE_NAME);
 			loaded.bufferFrames = 600;
 		}
 		if (loaded.reconnectBackoffMaxSeconds < 2 || loaded.reconnectBackoffMaxSeconds > 3600) {
 			JockeyRadioMod.LOGGER.warn(
-					"reconnectBackoffMaxSeconds {} in {} is outside 2..3600 - using default 60",
+					"reconnectBackoffMaxSeconds {} in {} is outside 2..3600; using default 60",
 					loaded.reconnectBackoffMaxSeconds, FILE_NAME);
 			loaded.reconnectBackoffMaxSeconds = 60;
 		}
@@ -767,13 +767,13 @@ public final class RadioConfig {
 				|| loaded.hlsStartBehindSegments > MAX_HLS_START_BEHIND_SEGMENTS) {
 			int clamped = Math.max(0, Math.min(MAX_HLS_START_BEHIND_SEGMENTS, loaded.hlsStartBehindSegments));
 			JockeyRadioMod.LOGGER.warn(
-					"hlsStartBehindSegments {} in {} is outside 0..{} - using {}",
+					"hlsStartBehindSegments {} in {} is outside 0..{}; using {}",
 					loaded.hlsStartBehindSegments, FILE_NAME, MAX_HLS_START_BEHIND_SEGMENTS, clamped);
 			loaded.hlsStartBehindSegments = clamped;
 		}
 		if (loaded.adminPermissionLevel < 0 || loaded.adminPermissionLevel > 4) {
 			JockeyRadioMod.LOGGER.warn(
-					"adminPermissionLevel {} in {} is outside 0..4 - using default 3",
+					"adminPermissionLevel {} in {} is outside 0..4; using default 3",
 					loaded.adminPermissionLevel, FILE_NAME);
 			loaded.adminPermissionLevel = 3;
 		}
@@ -787,13 +787,13 @@ public final class RadioConfig {
 				&& (loaded.nowPlayingPollSeconds < 5 || loaded.nowPlayingPollSeconds > 3600)) {
 			int clamped = Math.max(5, Math.min(3600, loaded.nowPlayingPollSeconds));
 			JockeyRadioMod.LOGGER.warn(
-					"nowPlayingPollSeconds {} in {} is outside 5..3600 (0 disables) - using {}",
+					"nowPlayingPollSeconds {} in {} is outside 5..3600 (0 disables); using {}",
 					loaded.nowPlayingPollSeconds, FILE_NAME, clamped);
 			loaded.nowPlayingPollSeconds = clamped;
 		}
 		if (loaded.monitorSeconds < 10 || loaded.monitorSeconds > 600) {
 			JockeyRadioMod.LOGGER.warn(
-					"monitorSeconds {} in {} is outside 10..600 - using default 90",
+					"monitorSeconds {} in {} is outside 10..600; using default 90",
 					loaded.monitorSeconds, FILE_NAME);
 			loaded.monitorSeconds = 90;
 		}
@@ -805,7 +805,7 @@ public final class RadioConfig {
 			loaded.nowPlayingHudMode = loaded.nowPlayingHudMode.trim().toLowerCase(Locale.ROOT);
 			if (!loaded.nowPlayingHudMode.equals("beacon") && !loaded.nowPlayingHudMode.equals("always")) {
 				JockeyRadioMod.LOGGER.warn(
-						"Unknown nowPlayingHudMode '{}' in {} (expected \"beacon\" or \"always\") - using \"beacon\"",
+						"Unknown nowPlayingHudMode '{}' in {} (expected \"beacon\" or \"always\"); using \"beacon\"",
 						loaded.nowPlayingHudMode, FILE_NAME);
 				loaded.nowPlayingHudMode = "beacon";
 			}
@@ -815,7 +815,7 @@ public final class RadioConfig {
 		if (loaded.nowPlayingHudTriggerRadius < 1 || loaded.nowPlayingHudTriggerRadius > 8) {
 			int clamped = Math.max(1, Math.min(8, loaded.nowPlayingHudTriggerRadius));
 			JockeyRadioMod.LOGGER.warn(
-					"nowPlayingHudTriggerRadius {} in {} is outside 1..8 - using {}",
+					"nowPlayingHudTriggerRadius {} in {} is outside 1..8; using {}",
 					loaded.nowPlayingHudTriggerRadius, FILE_NAME, clamped);
 			loaded.nowPlayingHudTriggerRadius = clamped;
 		}
@@ -828,7 +828,7 @@ public final class RadioConfig {
 				loaded.rtmpPublicHost = null;
 			} else if (host.contains("://") || host.contains("/")) {
 				JockeyRadioMod.LOGGER.warn(
-						"rtmpPublicHost '{}' in {} must be a bare host[:port] (no scheme, no path) - ignoring",
+						"rtmpPublicHost '{}' in {} must be a bare host[:port] (no scheme, no path); ignoring",
 						host, FILE_NAME);
 				loaded.rtmpPublicHost = null;
 			} else {
@@ -843,7 +843,7 @@ public final class RadioConfig {
 		if (loaded.opusBitrate < MIN_OPUS_BITRATE || loaded.opusBitrate > MAX_OPUS_BITRATE) {
 			int clamped = Math.max(MIN_OPUS_BITRATE, Math.min(MAX_OPUS_BITRATE, loaded.opusBitrate));
 			JockeyRadioMod.LOGGER.warn(
-					"opusBitrate {} in {} is outside {}..{} (the encoder caps mono at {}) - using {}",
+					"opusBitrate {} in {} is outside {}..{} (the encoder caps mono at {}); using {}",
 					loaded.opusBitrate, FILE_NAME, MIN_OPUS_BITRATE, MAX_OPUS_BITRATE,
 					MAX_OPUS_BITRATE, clamped);
 			loaded.opusBitrate = clamped;
@@ -854,7 +854,7 @@ public final class RadioConfig {
 		if (loaded.opusComplexity < MIN_OPUS_COMPLEXITY || loaded.opusComplexity > MAX_OPUS_COMPLEXITY) {
 			int clamped = Math.max(MIN_OPUS_COMPLEXITY, Math.min(MAX_OPUS_COMPLEXITY, loaded.opusComplexity));
 			JockeyRadioMod.LOGGER.warn(
-					"opusComplexity {} in {} is outside {}..{} - using {}",
+					"opusComplexity {} in {} is outside {}..{}; using {}",
 					loaded.opusComplexity, FILE_NAME, MIN_OPUS_COMPLEXITY, MAX_OPUS_COMPLEXITY, clamped);
 			loaded.opusComplexity = clamped;
 		}
@@ -864,7 +864,7 @@ public final class RadioConfig {
 			int clamped = Math.max(MIN_OPUS_FEC_PACKET_LOSS,
 					Math.min(MAX_OPUS_FEC_PACKET_LOSS, loaded.opusFecPacketLossPercent));
 			JockeyRadioMod.LOGGER.warn(
-					"opusFecPacketLossPercent {} in {} is outside {}..{} - using {}",
+					"opusFecPacketLossPercent {} in {} is outside {}..{}; using {}",
 					loaded.opusFecPacketLossPercent, FILE_NAME, MIN_OPUS_FEC_PACKET_LOSS,
 					MAX_OPUS_FEC_PACKET_LOSS, clamped);
 			loaded.opusFecPacketLossPercent = clamped;
@@ -878,7 +878,7 @@ public final class RadioConfig {
 			loaded.smoothingMode = loaded.smoothingMode.trim().toLowerCase(Locale.ROOT);
 			if (!loaded.smoothingMode.equals("tempo_match") && !loaded.smoothingMode.equals("rebuffer")) {
 				JockeyRadioMod.LOGGER.warn(
-						"Unknown smoothingMode '{}' in {} (expected \"tempo_match\" or \"rebuffer\") - using \"{}\"",
+						"Unknown smoothingMode '{}' in {} (expected \"tempo_match\" or \"rebuffer\"); using \"{}\"",
 						loaded.smoothingMode, FILE_NAME, DEFAULT_SMOOTHING_MODE);
 				loaded.smoothingMode = DEFAULT_SMOOTHING_MODE;
 			}
@@ -890,7 +890,7 @@ public final class RadioConfig {
 		double clampedStretchPct = clamp(stretchPct, 0.0, MAX_MAX_STRETCH_PERCENT);
 		if (loaded.maxStretchPercent != null && clampedStretchPct != stretchPct) {
 			JockeyRadioMod.LOGGER.warn(
-					"maxStretchPercent {} in {} is outside 0..{} - using {}",
+					"maxStretchPercent {} in {} is outside 0..{}; using {}",
 					stretchPct, FILE_NAME, MAX_MAX_STRETCH_PERCENT, clampedStretchPct);
 		}
 		loaded.resolvedMaxStretchPercent = clampedStretchPct;
@@ -916,7 +916,7 @@ public final class RadioConfig {
 		double targetSec = targetBufferSeconds != null ? targetBufferSeconds : DEFAULT_TARGET_BUFFER_SECONDS;
 		double clampedTarget = clamp(targetSec, MIN_TARGET_BUFFER_SECONDS, MAX_TARGET_BUFFER_SECONDS);
 		if (targetBufferSeconds != null && clampedTarget != targetSec) {
-			JockeyRadioMod.LOGGER.warn("targetBufferSeconds {} in {} is outside {}..{} - using {}",
+			JockeyRadioMod.LOGGER.warn("targetBufferSeconds {} in {} is outside {}..{}; using {}",
 					targetSec, FILE_NAME, MIN_TARGET_BUFFER_SECONDS, MAX_TARGET_BUFFER_SECONDS, clampedTarget);
 		}
 		targetSec = clampedTarget;
@@ -935,7 +935,7 @@ public final class RadioConfig {
 		}
 		double clampedMax = clamp(maxSec, targetSec, MAX_MAX_BUFFER_SECONDS);
 		if (maxBufferSeconds != null && clampedMax != maxSec) {
-			JockeyRadioMod.LOGGER.warn("maxBufferSeconds {} in {} is outside {}..{} - using {}",
+			JockeyRadioMod.LOGGER.warn("maxBufferSeconds {} in {} is outside {}..{}; using {}",
 					maxSec, FILE_NAME, targetSec, MAX_MAX_BUFFER_SECONDS, clampedMax);
 		}
 		maxSec = clampedMax;
@@ -949,7 +949,7 @@ public final class RadioConfig {
 		// operator raises the cap alongside the target instead of losing the lag bound.
 		if (maxSec < LAG_CAP_HEADROOM_WARN_MULTIPLIER * targetSec) {
 			JockeyRadioMod.LOGGER.warn(
-					"maxBufferSeconds {}s in {} gives little headroom over targetBufferSeconds {}s - the "
+					"maxBufferSeconds {}s in {} gives little headroom over targetBufferSeconds {}s; the "
 							+ "high-water lag cap needs the cap above the target to bound latency; raise "
 							+ "maxBufferSeconds to >= ~{}s (~{}x target) so a burst-inflated buffer still "
 							+ "trims back to target",
@@ -967,7 +967,7 @@ public final class RadioConfig {
 		double prerollSec = prerollSeconds != null ? prerollSeconds : prerollDefault;
 		double clampedPreroll = clamp(prerollSec, MIN_PREROLL_SECONDS, maxSec);
 		if (prerollSeconds != null && clampedPreroll != prerollSec) {
-			JockeyRadioMod.LOGGER.warn("prerollSeconds {} in {} is outside {}..{} - using {}",
+			JockeyRadioMod.LOGGER.warn("prerollSeconds {} in {} is outside {}..{}; using {}",
 					prerollSec, FILE_NAME, MIN_PREROLL_SECONDS, maxSec, clampedPreroll);
 		}
 		prerollSec = clampedPreroll;
@@ -988,7 +988,7 @@ public final class RadioConfig {
 				? reanchorLowWatermarkSeconds : DEFAULT_REANCHOR_LOW_WATERMARK_SECONDS;
 		double clampedLow = clamp(lowSec, MIN_REANCHOR_LOW_WATERMARK_SECONDS, targetSec);
 		if (reanchorLowWatermarkSeconds != null && clampedLow != lowSec) {
-			JockeyRadioMod.LOGGER.warn("reanchorLowWatermarkSeconds {} in {} is outside {}..{} - using {}",
+			JockeyRadioMod.LOGGER.warn("reanchorLowWatermarkSeconds {} in {} is outside {}..{}; using {}",
 					lowSec, FILE_NAME, MIN_REANCHOR_LOW_WATERMARK_SECONDS, targetSec, clampedLow);
 		}
 		lowSec = clampedLow;
@@ -1003,7 +1003,7 @@ public final class RadioConfig {
 		} else {
 			double clampedSustain = clamp(sustainSec, MIN_REANCHOR_SUSTAIN_SECONDS, MAX_REANCHOR_SUSTAIN_SECONDS);
 			if (reanchorSustainSeconds != null && clampedSustain != sustainSec) {
-				JockeyRadioMod.LOGGER.warn("reanchorSustainSeconds {} in {} is outside {}..{} - using {}",
+				JockeyRadioMod.LOGGER.warn("reanchorSustainSeconds {} in {} is outside {}..{}; using {}",
 						sustainSec, FILE_NAME, MIN_REANCHOR_SUSTAIN_SECONDS, MAX_REANCHOR_SUSTAIN_SECONDS, clampedSustain);
 			}
 			sustainFrames = Math.max(1, (int) Math.round(clampedSustain * FRAMES_PER_SECOND));
@@ -1021,7 +1021,7 @@ public final class RadioConfig {
 		// preroll depth so the operator sees the interaction (sow-005 Phase 4, finding).
 		if (sustainFrames > 0 && low >= this.prerollFrames) {
 			JockeyRadioMod.LOGGER.warn(
-					"reanchorLowWatermarkSeconds {}s in {} ({} frames) is at/above prerollSeconds ({} frames) - "
+					"reanchorLowWatermarkSeconds {}s in {} ({} frames) is at/above prerollSeconds ({} frames); "
 							+ "a re-anchor rebuilds only to the preroll depth, so the low water is forced below it "
 							+ "to keep the re-anchor firing once per drain episode; lower reanchorLowWatermarkSeconds "
 							+ "or raise prerollSeconds",

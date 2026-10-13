@@ -344,7 +344,7 @@ public final class NowPlayingPoller {
 				session.setNowPlayingStatus(RadioSession.NowPlayingStatus.UNAUTHORIZED);
 				if (unauthorizedLogged.compareAndSet(false, true)) {
 					JockeyRadioMod.LOGGER.info("[jockey] now-playing unauthorized (401) station={}"
-							+ " - now-playing unavailable, using feed-state fallback", def.discId);
+							+ "; now-playing unavailable, using feed-state fallback", def.discId);
 				}
 			}
 			// Any other status (5xx, 403, ...): keep the prior snapshot for a single

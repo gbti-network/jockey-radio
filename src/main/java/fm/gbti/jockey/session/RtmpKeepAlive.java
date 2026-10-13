@@ -132,7 +132,7 @@ public final class RtmpKeepAlive {
 				FeedRegistry.get().acquire(RadioManager.discFeedSource(def.discId, def));
 				anchored.put(key, def);
 				JockeyRadioMod.LOGGER.info(
-						"[jockey] rtmp keep-alive anchored station={} port={} - listener held 24/7",
+						"[jockey] rtmp keep-alive anchored station={} port={}; listener held 24/7",
 						key, def.rtmpPort);
 			} catch (Throwable t) {
 				// Never block server start on a bad disc; it just won't be kept alive.

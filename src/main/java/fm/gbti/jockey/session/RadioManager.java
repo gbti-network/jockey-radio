@@ -525,7 +525,7 @@ public final class RadioManager {
 					if (!config.enablePlatformLinks) {
 						JockeyRadioMod.LOGGER.warn(
 								"[jockey] platform disc '{}' not started: platform links are disabled. "
-										+ "Set enablePlatformLinks=true in jockey_radio.json to enable them - "
+										+ "Set enablePlatformLinks=true in jockey_radio.json to enable them; "
 										+ "doing so is an explicit acceptance that you have the rights to "
 										+ "rebroadcast the linked content on your server.", discId);
 						yield new StubStationFeed(discId);
@@ -562,7 +562,7 @@ public final class RadioManager {
 			RadioConfig.Station station = config.stations.get(stationKey);
 			if (station == null || station.url == null || station.url.isBlank()) {
 				JockeyRadioMod.LOGGER.warn(
-						"[jockey] no configured url for station={} - using stub feed", stationKey);
+						"[jockey] no configured url for station={}; using stub feed", stationKey);
 				return null;
 			}
 			return new HlsPullFeed(stationKey, StationEndpoints.forUrl(station.url, station.token),
@@ -805,7 +805,7 @@ public final class RadioManager {
 
 	private void checkServerThread(String what) {
 		if (server != null && !server.isSameThread()) {
-			JockeyRadioMod.LOGGER.error("[jockey] {} called off the server thread ({}) - this is a bug",
+			JockeyRadioMod.LOGGER.error("[jockey] {} called off the server thread ({}); this is a bug",
 					what, Thread.currentThread().getName(), new IllegalStateException());
 		}
 	}

@@ -98,7 +98,7 @@ public final class RadioDiscFactory {
 		Optional<? extends Holder<JukeboxSong>> song =
 				registries.lookupOrThrow(Registries.JUKEBOX_SONG).get(RADIO_SONG_KEY);
 		if (song.isEmpty()) {
-			JockeyRadioMod.LOGGER.error("Jukebox song {} is missing from the registry - is the mod datapack loaded?",
+			JockeyRadioMod.LOGGER.error("Jukebox song {} is missing from the registry; is the mod datapack loaded?",
 					RADIO_SONG_KEY.identifier());
 			return Optional.empty();
 		}
@@ -142,7 +142,7 @@ public final class RadioDiscFactory {
 		Optional<? extends Holder<JukeboxSong>> song =
 				registries.lookupOrThrow(Registries.JUKEBOX_SONG).get(RADIO_SONG_KEY);
 		if (song.isEmpty()) {
-			JockeyRadioMod.LOGGER.error("Jukebox song {} is missing from the registry - is the mod datapack loaded?",
+			JockeyRadioMod.LOGGER.error("Jukebox song {} is missing from the registry; is the mod datapack loaded?",
 					RADIO_SONG_KEY.identifier());
 			return Optional.empty();
 		}
@@ -199,11 +199,11 @@ public final class RadioDiscFactory {
 		}
 		Identifier id = Identifier.tryParse(baseDisc);
 		if (id == null) {
-			JockeyRadioMod.LOGGER.warn("Disc baseDisc '{}' is not a valid item id - using music_disc_13", baseDisc);
+			JockeyRadioMod.LOGGER.warn("Disc baseDisc '{}' is not a valid item id; using music_disc_13", baseDisc);
 			return Items.MUSIC_DISC_13;
 		}
 		return BuiltInRegistries.ITEM.getOptional(id).orElseGet(() -> {
-			JockeyRadioMod.LOGGER.warn("Disc baseDisc '{}' is not a known item - using music_disc_13", baseDisc);
+			JockeyRadioMod.LOGGER.warn("Disc baseDisc '{}' is not a known item; using music_disc_13", baseDisc);
 			return Items.MUSIC_DISC_13;
 		});
 	}

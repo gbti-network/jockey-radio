@@ -86,24 +86,24 @@ public final class HostCapabilityProbe {
 			// and "not configured" all fell through to "fully supported" while the startup
 			// doctor logged the opposite and the mod quietly ran on stub feeds.
 			if (canSpawn != Verdict.YES) {
-				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: this host BLOCKS process spawning - "
+				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: this host BLOCKS process spawning; "
 						+ "no audio source can work here, bundled binaries would not help.");
 			} else if (canExec == Verdict.NO) {
 				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: processes spawn, but a binary written "
 						+ "into the server directory CANNOT be executed (noexec or equivalent). Shipping "
 						+ "bundled binaries will NOT work on this host; ffmpeg must already be on PATH.");
 			} else if (canExec == Verdict.UNKNOWN) {
-				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: INCONCLUSIVE - the exec probe did not "
+				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: INCONCLUSIVE; the exec probe did not "
 						+ "finish ({}), so whether a bundled binary can run here is unknown.", execDetail);
 			} else if (ffmpeg.ok()) {
 				JockeyRadioMod.LOGGER.info("[jockey] host VERDICT: extracted binaries are executable and "
-						+ "ffmpeg is present - this host is fully supported.");
+						+ "ffmpeg is present; this host is fully supported.");
 			} else if (ffmpeg.missing()) {
-				JockeyRadioMod.LOGGER.info("[jockey] host VERDICT: extracted binaries ARE executable here - "
+				JockeyRadioMod.LOGGER.info("[jockey] host VERDICT: extracted binaries ARE executable here; "
 						+ "bundling ffmpeg/yt-dlp is viable. ffmpeg is not installed, which bundling would fix.");
 			} else {
 				JockeyRadioMod.LOGGER.warn("[jockey] host VERDICT: extracted binaries are executable, but "
-						+ "ffmpeg did not answer -version ({}) - feeds will fall back to stubs until this is "
+						+ "ffmpeg did not answer -version ({}); feeds will fall back to stubs until this is "
 						+ "resolved.", ffmpeg.detail());
 			}
 			JockeyRadioMod.LOGGER.info("[jockey] --------------------------------");
@@ -184,7 +184,7 @@ public final class HostCapabilityProbe {
 		} catch (IOException e) {
 			String m = String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT);
 			if (m.contains("permission denied") || m.contains("error=13")) {
-				return new String[] { "NO", "permission denied on exec - filesystem is likely mounted noexec" };
+				return new String[] { "NO", "permission denied on exec; filesystem is likely mounted noexec" };
 			}
 			return new String[] { "NO", "IOException: " + e.getMessage() };
 		} catch (Throwable t) {
@@ -248,7 +248,7 @@ public final class HostCapabilityProbe {
 			}
 			String first = out.isBlank() ? "(no output)" : out.lines().findFirst().orElse("(no output)").trim();
 			return p.exitValue() == 0
-					? new Tool(true, false, "OK - " + trim(first))
+					? new Tool(true, false, "OK (" + trim(first) + ")")
 					: new Tool(false, false, "exit=" + p.exitValue() + " " + trim(first));
 		} catch (IOException e) {
 			// EACCES is NOT "missing": the file is right there, it just has no exec bit. Saying
@@ -256,7 +256,7 @@ public final class HostCapabilityProbe {
 			String m = String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT);
 			if (m.contains("permission denied") || m.contains("error=13")) {
 				return new Tool(false, false, "present but NOT EXECUTABLE ('" + binary
-						+ "' is mode 644?) - the mod tried to set the execute bit and could not");
+						+ "' is mode 644?); the mod tried to set the execute bit and could not");
 			}
 			return new Tool(false, true, "missing ('" + binary + "' not found on this host)");
 		} catch (Throwable t) {

@@ -222,7 +222,7 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		if (!loggedResolveFailure) {
 			loggedResolveFailure = true;
 			JockeyRadioMod.LOGGER.warn(
-					"[jockey] yt-dlp could not resolve station={} link={} ({}) - is '{}' installed and current? "
+					"[jockey] yt-dlp could not resolve station={} link={} ({}); is '{}' installed and current? "
 							+ "retrying on the reconnect ladder",
 					stationKey(), displayUrl, why, ytdlpBinary);
 		}

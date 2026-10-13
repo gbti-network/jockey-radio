@@ -1103,7 +1103,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			if (stopAtEndOfInput() && firstFrameNanos >= 0) {
 				inputEnded = true;
 				connectionState = "ended";
-				JockeyRadioMod.LOGGER.info("[jockey] feed end-of-input station={} (repeat off) - playing once, stopping",
+				JockeyRadioMod.LOGGER.info("[jockey] feed end-of-input station={} (repeat off); playing once, stopping",
 						stationKey);
 				break;
 			}
@@ -1596,7 +1596,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 						}
 						recordDrops(stretchTrim, DropCause.CATCH_UP);
 						JockeyRadioMod.LOGGER.error(
-								"[jockey] time-stretch failed station={} - falling back to passthrough for this feed",
+								"[jockey] time-stretch failed station={}; falling back to passthrough for this feed",
 								stationKey, t);
 					}
 				}
@@ -1680,7 +1680,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				reanchors.incrementAndGet();
 				recordGlitchEvent();
 				JockeyRadioMod.LOGGER.info(
-						"[jockey] feed reanchor station={} buffered={} lowWaterFrames={} sustainFrames={} - "
+						"[jockey] feed reanchor station={} buffered={} lowWaterFrames={} sustainFrames={}; "
 								+ "sustained drain; re-prerolling to rebuild target cushion",
 						stationKey, reanchorBuffered, reanchorLowWaterFrames, reanchorSustainFrames);
 			}
@@ -1732,7 +1732,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 					hostFreezeMillis.addAndGet(freezeMs);
 					JockeyRadioMod.LOGGER.warn(
 							"[jockey] host stall station={} froze~{}ms (monotonic clock paused vs wall clock: the OS/VM "
-									+ "suspended the process - NOT the mod). A client playout buffer shallower than "
+									+ "suspended the process, NOT the mod). A client playout buffer shallower than "
 									+ "~{}ms will hitch here.",
 							stationKey, freezeMs, freezeMs);
 				}
@@ -1843,7 +1843,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 				lastStatsOverflowDrops = totalOverflowDrops;
 				if (overflowDelta > DROPS_WARN_PER_STATS_INTERVAL) {
 					JockeyRadioMod.LOGGER.warn(
-							"[jockey] feed drops high station={} overflowLast30s={} maxBufferFrames={} - upstream "
+							"[jockey] feed drops high station={} overflowLast30s={} maxBufferFrames={}; upstream "
 									+ "bursts exceed the jitter buffer's hard cap; raise 'maxBufferSeconds' in "
 									+ "jockey_radio.json",
 							stationKey, overflowDelta, maxBufferFrames);
@@ -1947,7 +1947,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 			return;
 		}
 		JockeyRadioMod.LOGGER.warn(
-				"[jockey] feed ingest stalled station={} - no audio from ffmpeg for {}s while the process is still "
+				"[jockey] feed ingest stalled station={}; no audio from ffmpeg for {}s while the process is still "
 						+ "alive; restarting the connection",
 				stationKey, TimeUnit.NANOSECONDS.toSeconds(stalledNanos));
 		lastIngestFrameNanos = 0L;

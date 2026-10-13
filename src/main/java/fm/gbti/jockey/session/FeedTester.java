@@ -119,7 +119,7 @@ public final class FeedTester {
 				// A probe must never crash the pool thread or leak internals into
 				// the dialog; report a generic failure and log the detail server-side.
 				JockeyRadioMod.LOGGER.warn("[jockey] feed test failed disc={}", def.discId, t);
-				result = new Result("Test failed", "The probe hit an unexpected error - see the server log.");
+				result = new Result("Test failed", "The probe hit an unexpected error. See the server log.");
 			}
 			onResult.accept(result);
 		};
@@ -211,8 +211,8 @@ public final class FeedTester {
 		}
 		if (frames == 0) {
 			return new Result("Listener waiting",
-					"Listener bound on " + publishUrl + " and waiting for a publisher - "
-							+ "no audio received yet.\nPush to that URL (replace *** with the stream key).");
+					"Listener bound on " + publishUrl + " and waiting for a publisher. "
+							+ "No audio received yet.\nPush to that URL (replace *** with the stream key).");
 		}
 		return new Result("Receiving audio",
 				"Listener on " + publishUrl + " is currently receiving audio (frames > 0).");

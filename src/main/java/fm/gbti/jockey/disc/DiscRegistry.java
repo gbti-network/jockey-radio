@@ -138,7 +138,7 @@ public final class DiscRegistry {
 			// and loadFailed still blocks any save from overwriting the unreadable file.
 			loadFailed = true;
 			JockeyRadioMod.LOGGER.error(
-					"[jockey] malformed {} - keeping the discs already loaded and DISABLING saves until this "
+					"[jockey] malformed {}; keeping the discs already loaded and DISABLING saves until this "
 							+ "file is fixed or removed, so its definitions are not overwritten.", path, e);
 			return;
 		}
@@ -151,8 +151,8 @@ public final class DiscRegistry {
 		loadFailed = dropped;
 		if (dropped) {
 			JockeyRadioMod.LOGGER.error(
-					"[jockey] {} loaded with {} valid disc(s) but some entries were rejected (see warnings above) "
-							+ "- saves are DISABLED so the rejected entries are not lost. Fix or remove them, then "
+					"[jockey] {} loaded with {} valid disc(s) but some entries were rejected (see warnings above)"
+							+ "; saves are DISABLED so the rejected entries are not lost. Fix or remove them, then "
 							+ "/jockey reload.", FILE_NAME, fresh.size());
 		} else {
 			JockeyRadioMod.LOGGER.info("[jockey] loaded {} disc(s) from {}", fresh.size(), path);
@@ -216,7 +216,7 @@ public final class DiscRegistry {
 					if (other.sourceType == DiscDefinition.SourceType.RTMP_RECEIVE
 							&& other.rtmpPort == def.rtmpPort && bindsClash(def.rtmpBind, other.rtmpBind)) {
 						JockeyRadioMod.LOGGER.warn(
-								"[jockey] discs '{}' and '{}' both listen on {}:{} - only one can bind it; the other "
+								"[jockey] discs '{}' and '{}' both listen on {}:{}, and only one can bind it; the other "
 										+ "will never receive audio. Give one a different rtmpPort.",
 								other.discId, def.discId, def.rtmpBind, def.rtmpPort);
 						break;

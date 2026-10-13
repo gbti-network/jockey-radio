@@ -91,7 +91,7 @@ public final class FeedRegistry {
 		synchronized (lock) {
 			if (shutDown) {
 				JockeyRadioMod.LOGGER.warn(
-						"[jockey] feed acquire during shutdown station={} - handing out unregistered stub feed",
+						"[jockey] feed acquire during shutdown station={}; handing out unregistered stub feed",
 						source.stationKey());
 				return new StubStationFeed(source.stationKey());
 			}
@@ -181,7 +181,7 @@ public final class FeedRegistry {
 		RadioConfig config = RadioConfig.get();
 		if ("stub".equals(config.ingest)) {
 			useFfmpeg = false;
-			JockeyRadioMod.LOGGER.info("[jockey] ingest=stub (configured) - feeds will not fetch audio");
+			JockeyRadioMod.LOGGER.info("[jockey] ingest=stub (configured); feeds will not fetch audio");
 			return;
 		}
 		String binary = config.ffmpegBinary;
@@ -200,7 +200,7 @@ public final class FeedRegistry {
 		} else {
 			useFfmpeg = false;
 			JockeyRadioMod.LOGGER.error(
-					"[jockey] ffmpeg is not runnable ('{} -version' failed: {}) - falling back to stub feeds; "
+					"[jockey] ffmpeg is not runnable ('{} -version' failed: {}). Falling back to stub feeds, so "
 							+ "sessions still track but no audio will stream. Install ffmpeg or set "
 							+ "'ffmpegBinary' in jockey_radio.json.",
 					binary, failure);
