@@ -705,8 +705,7 @@ public final class JockeyRadioDialogs {
 			body.add(body(Component.literal("▸ Streams audio from:")));
 			body.add(connRow("Source", shown));
 			actions.add(copyButton(Lang.tr("jockey_radio.copy.source", "Copy source URL"), shown));
-			body.add(body(note("Idle means the station isn't broadcasting yet (a status, not an error). "
-					+ "Any token stays masked and never appears in this URL.")));
+			body.add(body(note(idleNote(def.sourceType))));
 		}
 
 		actions.add(navIdButton(Lang.tr("jockey_radio.button.edit", "Edit"), "edit", def.discId, 220));
@@ -1012,6 +1011,22 @@ public final class JockeyRadioDialogs {
 			return segment + " - " + tag;
 		}
 		return segment != null ? segment : tag;
+	}
+
+	/**
+	 * What "idle" means on the detail page. The badge reads idle whenever no feed is receiving
+	 * audio, which most often means no jukebox is playing the disc; only a stream disc can also
+	 * be idle because its station is off air.
+	 */
+	private static String idleNote(DiscDefinition.SourceType type) {
+		return switch (type) {
+			case FILE -> "Idle means no jukebox is playing this disc, or the file could not be reached. "
+					+ "Test checks the file.";
+			case PLATFORM -> "Idle means no jukebox is playing this disc, or the link has nothing live. "
+					+ "Test checks the link.";
+			default -> "Idle means the station isn't broadcasting yet, or no jukebox is playing this disc. "
+					+ "Any token stays masked and never appears in this URL.";
+		};
 	}
 
 	/** Live/idle status from the shared feed state (live = a real feed is receiving audio). */
