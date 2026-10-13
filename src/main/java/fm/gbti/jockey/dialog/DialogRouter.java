@@ -19,6 +19,7 @@ import net.minecraft.server.permissions.PermissionCheck;
 import net.minecraft.server.permissions.PermissionLevel;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -364,6 +365,8 @@ public final class DialogRouter {
 		def.radiusBlocks = Math.round(tag.getFloatOr("radius_blocks",
 				edit ? existing.radiusBlocks : DiscDefinition.DEFAULT_RADIUS_BLOCKS));
 
+		// True when an edit left the token field blank and the stored token was carried over.
+		boolean streamTokenCarried = false;
 		if ("rtmp_receive".equals(source)) {
 			def.sourceType = DiscDefinition.SourceType.RTMP_RECEIVE;
 			def.rtmpPort = parseInt(tag.getStringOr("rtmp_port", ""), -1);
@@ -408,10 +411,15 @@ public final class DialogRouter {
 				def.stationId = existing.stationId;
 			}
 			String token = tag.getStringOr("token", "");
-			if (edit && token.isBlank()) {
+			// A typed token always wins; a blank field on edit keeps the stored one unless
+			// the admin chose Clear (the token is never shown, so it cannot be blanked).
+			if (!token.isBlank()) {
+				def.token = token;
+			} else if (edit && !"clear".equals(tag.getStringOr("token_action", "keep"))) {
 				def.token = existing.token;
+				streamTokenCarried = true;
 			} else {
-				def.token = token.isBlank() ? null : token;
+				def.token = null;
 			}
 		} else {
 			DialogScreens.send(player, JockeyRadioDialogs.errorThen("Invalid submission",
@@ -432,6 +440,10 @@ public final class DialogRouter {
 			String nowPlayingUrl = tag.getStringOr("now_playing_url", "");
 			def.nowPlayingUrl = nowPlayingUrl.isBlank() ? null : nowPlayingUrl;
 		}
+
+		List<String> clearedSecrets = edit
+				? def.dropSecretsMovedFrom(existing, streamTokenCarried)
+				: List.of();
 
 		// Optional per-disc marquee template. The HUD shows a templated marquee only for a
 		// truly-live source, so only the live HLS/RTMP forms carry the field; the PLATFORM and
@@ -477,7 +489,7 @@ public final class DialogRouter {
 		// exactly the "result you can act on immediately" the redesign wants.
 		DiscDefinition saved = DiscRegistry.get().get(def.discId).orElse(def);
 		DialogScreens.send(player, JockeyRadioDialogs.discDetail(player.registryAccess(), saved,
-				(edit ? "Updated '" : "Saved '") + def.discId + "'."));
+				(edit ? "Updated '" : "Saved '") + def.discId + "'." + clearedSecretsNote(clearedSecrets)));
 	}
 
 	// ------------------------------------------------------------------
@@ -782,6 +794,17 @@ public final class DialogRouter {
 		} catch (RuntimeException e) {
 			return fallback;
 		}
+	}
+
+	/** The save notice's explanation for secrets dropped by an origin change, or blank. */
+	static String clearedSecretsNote(List<String> cleared) {
+		if (cleared.isEmpty()) {
+			return "";
+		}
+		boolean one = cleared.size() == 1;
+		return " The stored " + String.join(" and ", cleared)
+				+ (one ? " was cleared because its URL moved" : " were cleared because their URLs moved")
+				+ " to a different host. Enter " + (one ? "it" : "them") + " again if the new host needs one.";
 	}
 
 	/**

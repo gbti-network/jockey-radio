@@ -7,6 +7,7 @@ import fm.gbti.jockey.JockeyRadioMod;
 import fm.gbti.jockey.config.RadioConfig;
 import fm.gbti.jockey.disc.DiscDefinition;
 import fm.gbti.jockey.disc.DiscRegistry;
+import fm.gbti.jockey.disc.Origins;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -74,6 +75,12 @@ public final class NowPlayingPoller {
 
 	private ScheduledExecutorService scheduler;
 	private volatile HttpClient client;
+	/**
+	 * For polls that carry a bearer token: never follows redirects, so the token can
+	 * never be forwarded to a host it was not entered for. A redirecting endpoint reads
+	 * as a reachable-but-erroring response; point the disc at the final URL instead.
+	 */
+	private volatile HttpClient authClient;
 	/** Guards the single 401 log line per poller run (never spam). Reset on start. */
 	private final AtomicBoolean unauthorizedLogged = new AtomicBoolean(false);
 
@@ -102,18 +109,8 @@ public final class NowPlayingPoller {
 			thread.setDaemon(true);
 			return thread;
 		};
-		client = HttpClient.newBuilder()
-				.connectTimeout(TIMEOUT)
-				// Force HTTP/1.1. The default (HTTP/2) makes the client attempt an h2c
-				// upgrade on a cleartext http:// URL - it sends an "Upgrade: h2c" +
-				// "HTTP2-Settings" header pair that the SavePoint (Node/Express) server
-				// rejects with "400 Invalid Upgrade header", so every poll came back 400
-				// and the snapshot was cleared (bar/detail fell back to feed-state "on
-				// air"/"live" and never showed the real track). curl/browsers avoid this
-				// only because they default to HTTP/1.1. Verified: HTTP/1.1 -> 200 + JSON.
-				.version(HttpClient.Version.HTTP_1_1)
-				.followRedirects(HttpClient.Redirect.NORMAL)
-				.build();
+		client = newClient(HttpClient.Redirect.NORMAL);
+		authClient = newClient(HttpClient.Redirect.NEVER);
 		unauthorizedLogged.set(false); // a fresh run may log its first 401 again
 		scheduler = Executors.newSingleThreadScheduledExecutor(factory);
 		// The one log line the contract allows when enabled.
@@ -128,15 +125,35 @@ public final class NowPlayingPoller {
 			scheduler = null;
 		}
 		HttpClient http = client;
+		HttpClient authHttp = authClient;
 		client = null; // stops any in-flight pass from issuing a new send
+		authClient = null;
+		// Reclaim each client's SelectorManager thread and default executor
+		// promptly instead of waiting for GC (they otherwise linger past a
+		// return-to-title on the integrated server). shutdownNow, not close:
+		// stop() runs on the server thread at SERVER_STOPPING and must not
+		// block on in-flight I/O - the scheduler thread was just interrupted.
 		if (http != null) {
-			// Reclaim the client's SelectorManager thread and default executor
-			// promptly instead of waiting for GC (they otherwise linger past a
-			// return-to-title on the integrated server). shutdownNow, not close:
-			// stop() runs on the server thread at SERVER_STOPPING and must not
-			// block on in-flight I/O - the scheduler thread was just interrupted.
 			http.shutdownNow();
 		}
+		if (authHttp != null) {
+			authHttp.shutdownNow();
+		}
+	}
+
+	private static HttpClient newClient(HttpClient.Redirect redirects) {
+		return HttpClient.newBuilder()
+				.connectTimeout(TIMEOUT)
+				// Force HTTP/1.1. The default (HTTP/2) makes the client attempt an h2c
+				// upgrade on a cleartext http:// URL - it sends an "Upgrade: h2c" +
+				// "HTTP2-Settings" header pair that the SavePoint (Node/Express) server
+				// rejects with "400 Invalid Upgrade header", so every poll came back 400
+				// and the snapshot was cleared (bar/detail fell back to feed-state "on
+				// air"/"live" and never showed the real track). curl/browsers avoid this
+				// only because they default to HTTP/1.1. Verified: HTTP/1.1 -> 200 + JSON.
+				.version(HttpClient.Version.HTTP_1_1)
+				.followRedirects(redirects)
+				.build();
 	}
 
 	/**
@@ -149,7 +166,8 @@ public final class NowPlayingPoller {
 	 */
 	private void pollAllSafely() {
 		HttpClient http = client;
-		if (http == null) {
+		HttpClient authHttp = authClient;
+		if (http == null || authHttp == null) {
 			return;
 		}
 		try {
@@ -175,8 +193,9 @@ public final class NowPlayingPoller {
 					continue;
 				}
 				try {
-					CompletableFuture<HttpResponse<String>> future =
-							http.sendAsync(buildRequest(def, url), HttpResponse.BodyHandlers.ofString());
+					String bearer = bearerFor(def, url);
+					CompletableFuture<HttpResponse<String>> future = (bearer != null ? authHttp : http)
+							.sendAsync(buildRequest(url, bearer), HttpResponse.BodyHandlers.ofString());
 					pending.add(new Pending(session, def, future));
 				} catch (Throwable submitFailure) {
 					// Bad URI / rejected submit (e.g. client shutting down): treat as
@@ -233,15 +252,31 @@ public final class NowPlayingPoller {
 	}
 
 	/** Builds the GET, attaching the bearer (secret: header only, never logged) when present. */
-	private static HttpRequest buildRequest(DiscDefinition def, String url) {
+	private static HttpRequest buildRequest(String url, String bearer) {
 		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
 				.timeout(TIMEOUT)
 				.GET();
-		String bearer = def.nowPlayingToken != null ? def.nowPlayingToken : def.token;
-		if (bearer != null && !bearer.isBlank()) {
+		if (bearer != null) {
 			builder.header("Authorization", "Bearer " + bearer);
 		}
 		return builder.build();
+	}
+
+	/**
+	 * The bearer for a now-playing poll, or {@code null}. A {@code nowPlayingToken} is
+	 * entered for the now-playing endpoint itself. The stream {@code token} is only a
+	 * fallback, sent solely when the now-playing URL shares the stream's origin: a
+	 * now-playing endpoint on another host must never receive the stream's secret.
+	 */
+	static String bearerFor(DiscDefinition def, String url) {
+		if (def.nowPlayingToken != null && !def.nowPlayingToken.isBlank()) {
+			return def.nowPlayingToken;
+		}
+		if (def.token != null && !def.token.isBlank()
+				&& Origins.of(url) != null && Origins.same(url, def.streamTokenTarget())) {
+			return def.token;
+		}
+		return null;
 	}
 
 	/**

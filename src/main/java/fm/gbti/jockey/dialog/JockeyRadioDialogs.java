@@ -284,6 +284,9 @@ public final class JockeyRadioDialogs {
 				? Lang.tr("jockey_radio.input.token_keep", "Access token (blank keeps current)")
 				: Lang.tr("jockey_radio.input.token_optional", "Access token (optional)"),
 				pick(values, d -> d.token, ""), 512)));
+		if (edit) {
+			inputs.add(new Input("token_action", tokenActionInput()));
+		}
 		// Optional override: now-playing is normally derived from the stream URL, but
 		// a non-SavePoint stream (or a moved now-playing endpoint) can set it here.
 		inputs.add(new Input("now_playing_url",
@@ -1142,6 +1145,19 @@ public final class JockeyRadioDialogs {
 				new SingleOptionInput.Entry("off",
 						Optional.of(Component.literal("Play once, then stop")), !repeat));
 		return new SingleOptionInput(220, entries, Lang.tr("jockey_radio.input.repeat", "Repeat"), true);
+	}
+
+	/**
+	 * Edit-only Keep/Clear selector for the stored HLS access token, which is never shown
+	 * and so cannot be blanked by hand. Submits {@code keep} (default) or {@code clear}.
+	 */
+	private static SingleOptionInput tokenActionInput() {
+		List<SingleOptionInput.Entry> entries = List.of(
+				new SingleOptionInput.Entry("keep",
+						Optional.of(Component.literal("Keep the stored token")), true),
+				new SingleOptionInput.Entry("clear",
+						Optional.of(Component.literal("Clear the stored token")), false));
+		return new SingleOptionInput(220, entries, Lang.tr("jockey_radio.input.token_action", "Stored token"), true);
 	}
 
 	private static ActionButton navButton(Component label, String to, int width) {

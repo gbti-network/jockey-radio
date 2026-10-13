@@ -4,6 +4,8 @@ import com.google.gson.annotations.SerializedName;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -415,6 +417,46 @@ public final class DiscDefinition {
 			return Optional.of(field + " must have a non-blank host");
 		}
 		return Optional.empty();
+	}
+
+	/**
+	 * Keeps each carried-over secret bound to the origin it was entered for. When an
+	 * edit moves the stream or the now-playing endpoint to another host, the stored
+	 * token is dropped instead of being sent there; the admin enters it again if the new
+	 * host needs one. Returns the names of the secrets dropped, for the save notice.
+	 *
+	 * @param previous the stored definition this edit replaces
+	 * @param streamTokenCarried whether {@link #token} was carried over from
+	 *        {@code previous} (a token typed in this edit is trusted as entered)
+	 */
+	public List<String> dropSecretsMovedFrom(DiscDefinition previous, boolean streamTokenCarried) {
+		List<String> dropped = new ArrayList<>();
+		if (streamTokenCarried && token != null
+				&& !Origins.same(streamTokenTarget(), previous.streamTokenTarget())) {
+			token = null;
+			dropped.add("stream token");
+		}
+		if (nowPlayingToken != null
+				&& !Origins.same(resolveNowPlayingUrl(), previous.resolveNowPlayingUrl())) {
+			nowPlayingToken = null;
+			dropped.add("now-playing token");
+		}
+		return dropped;
+	}
+
+	/**
+	 * Where the stream {@link #token} is sent: the {@link #streamUrl}, else the legacy
+	 * {@code https://<host>} trunk. {@code null} when neither is set. The token is only
+	 * valid for this URL's {@link Origins origin}.
+	 */
+	public String streamTokenTarget() {
+		if (streamUrl != null && !streamUrl.isBlank()) {
+			return streamUrl.trim();
+		}
+		if (host != null && !host.isBlank()) {
+			return "https://" + host.trim() + "/";
+		}
+		return null;
 	}
 
 	/**
