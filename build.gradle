@@ -72,45 +72,35 @@ processResources {
 	def productDir = file("${rootDir}/.product")
 	def bundledFfmpeg = file("${productDir}/ffmpeg-linux-amd64-lgpl")
 	def bundledYtdlp = file("${productDir}/yt-dlp-linux")
-	def bundledDeno = file("${productDir}/deno")
 	def bundledNotice = file("${productDir}/THIRD-PARTY-NOTICES.txt")
 	def bundledLicenses = file("${productDir}/licenses")
-	// Windows/amd64 set (ffmpeg.exe, yt-dlp.exe, deno.exe), bundled alongside when present.
+	// Windows/amd64 set (ffmpeg.exe, yt-dlp.exe), bundled alongside when present.
 	def winFfmpeg = file("${productDir}/ffmpeg-windows-amd64-lgpl.exe")
 	def winYtdlp = file("${productDir}/yt-dlp-windows.exe")
-	def winDeno = file("${productDir}/deno-windows.exe")
 	// Declare the optional product tree via inputs.files (NOT inputs.dir): inputs.files tolerates a
 	// missing path, so CI - which has no .product/ - validates and takes the thin-jar branch below,
 	// whereas inputs.dir would fail validation on the absent directory before the fallback runs.
-	inputs.files(bundledFfmpeg, bundledYtdlp, bundledDeno, winFfmpeg, winYtdlp, winDeno, bundledNotice, bundledLicenses)
+	inputs.files(bundledFfmpeg, bundledYtdlp, winFfmpeg, winYtdlp, bundledNotice, bundledLicenses)
 	if (bundledFfmpeg.exists() && bundledYtdlp.exists()) {
 		into('jockey_radio/bin/linux-amd64') {
 			from(bundledFfmpeg) { rename { 'ffmpeg' } }
 			from(bundledYtdlp) { rename { 'yt-dlp' } }
-			// deno is the JS runtime yt-dlp needs for YouTube; optional (thin bundle omits it).
-			if (bundledDeno.exists()) {
-				from(bundledDeno) { rename { 'deno' } }
-			}
 		}
 		if (winFfmpeg.exists() && winYtdlp.exists()) {
 			into('jockey_radio/bin/windows-amd64') {
 				from(winFfmpeg) { rename { 'ffmpeg.exe' } }
 				from(winYtdlp) { rename { 'yt-dlp.exe' } }
-				if (winDeno.exists()) {
-					from(winDeno) { rename { 'deno.exe' } }
-				}
 			}
 		}
 		if (bundledNotice.exists()) {
 			into('jockey_radio') { from(bundledNotice) }
 		}
-		// Full license texts for the bundled binaries + Concentus (LGPL/GPL/MIT/Unlicense/BSD).
+		// Full license texts for the bundled binaries + Concentus (LGPL/GPL/Unlicense/BSD).
 		if (bundledLicenses.exists()) {
 			into('jockey_radio/licenses') { from(bundledLicenses) }
 		}
 		doLast {
-			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp' +
-					(bundledDeno.exists() ? ' + deno' : '') + ' (linux-amd64)' +
+			logger.lifecycle('processResources: BUNDLED ffmpeg + yt-dlp (linux-amd64)' +
 					(winFfmpeg.exists() && winYtdlp.exists() ? ' and windows-amd64' : '') + ' into the jar.')
 		}
 	} else {

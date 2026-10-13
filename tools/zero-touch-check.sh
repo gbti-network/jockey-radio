@@ -4,10 +4,11 @@
 # Boots a throwaway Fabric server holding only the jar under test, Fabric API and Simple
 # Voice Chat, on WSL's own Linux filesystem (DrvFs under /mnt marks every file executable,
 # which would make the permission checks meaningless), with an empty PATH so no host
-# ffmpeg or yt-dlp can be found. Four boots:
+# ffmpeg or yt-dlp can be found. Five boots:
 #
-#   fresh     the bundled ffmpeg, yt-dlp and deno self-extract, owner-only, and run
+#   fresh     the bundled ffmpeg and yt-dlp self-extract, owner-only, and run
 #   reboot    the version marker is current, so nothing is extracted again
+#   upgrade   a 0.1.3 bin folder (old marker, deno) is re-extracted and its deno removed
 #   disabled  useBundledBinaries=false: ffmpeg is reported missing and the server still starts
 #   stale     ffmpegBinary names a path that no longer exists: the bundled copy is used instead
 #
@@ -98,10 +99,11 @@ no_jockey_errors() { ! grep -E '\[jockey\].*(could not install|Exception)' "$WOR
 echo "boot 1: fresh"
 boot fresh
 check "server reached ready" logged fresh 'Done ('
-check "bundled binaries installed" logged fresh '[jockey] installed bundled ffmpeg + yt-dlp + deno'
-for tool in ffmpeg yt-dlp deno; do
+check "bundled binaries installed" logged fresh '[jockey] installed bundled ffmpeg + yt-dlp to'
+for tool in ffmpeg yt-dlp; do
 	check "$tool extracted, owner-only (700)" owner_only_exec "$BIN/$tool"
 done
+check "no deno extracted" test ! -e "$BIN/deno"
 check "extracted ffmpeg runs" ffmpeg_runs
 check "host verdict: extracted binaries are executable" logged fresh 'host VERDICT: extracted binaries'
 check "no jockey errors" no_jockey_errors fresh
@@ -112,7 +114,16 @@ boot reboot
 check "server reached ready" logged reboot 'Done ('
 check "nothing extracted again" bash -c "! grep -qF 'installed bundled' '$WORK/boot-reboot.log'"
 
-echo "boot 3: bundling disabled"
+echo "boot 3: upgrade from a 0.1.3 bin folder"
+echo "deno-btbn-N125748+ytdlp-2026.07.04+jockey-radio" > "$BIN/.bundle-version"
+printf 'stale deno' > "$BIN/deno"
+boot upgrade
+check "server reached ready" logged upgrade 'Done ('
+check "old bundle re-extracted" logged upgrade '[jockey] installed bundled ffmpeg + yt-dlp to'
+check "stale deno removed" test ! -e "$BIN/deno"
+check "no jockey errors" no_jockey_errors upgrade
+
+echo "boot 4: bundling disabled"
 CONFIG="$WORK/config/jockey_radio.json"
 check "config has useBundledBinaries" grep -q '"useBundledBinaries": true' "$CONFIG"
 sed -i 's/"useBundledBinaries": true/"useBundledBinaries": false/' "$CONFIG" 2>/dev/null || true
@@ -121,7 +132,7 @@ check "server reached ready" logged disabled 'Done ('
 check "ffmpeg reported missing (empty PATH)" logged disabled 'host ffmpeg=missing'
 check "no crash reports" no_crash_reports
 
-echo "boot 4: stale configured path"
+echo "boot 5: stale configured path"
 sed -i -e 's/"useBundledBinaries": false/"useBundledBinaries": true/' \
 	-e 's#"ffmpegBinary": "[^"]*"#"ffmpegBinary": "D:/moved-away/ffmpeg.exe"#' "$CONFIG" 2>/dev/null || true
 boot stale

@@ -37,9 +37,9 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 - **Java 25**, **Fabric Loader 0.19.3+**, and **Fabric API** (`0.155.2+26.2` target).
 - **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat) (server side) is required** -
   it is how the audio reaches players.
-- **ffmpeg** (and **yt-dlp** for platform links). On linux/amd64 these are **bundled in the jar**
-  and self-extract on first run (about 250 MB into the config dir); on other platforms put
-  `ffmpeg` on the `PATH` or set `ffmpegBinary`.
+- **ffmpeg** (and **yt-dlp** for platform links). On linux/amd64 and windows/amd64 these are
+  **bundled in the jar** and self-extract on first run (about 185 MB into the config dir); on other
+  platforms put `ffmpeg` on the `PATH` or set `ffmpegBinary`.
 
 **To listen:** Fabric Loader + Fabric API + the Simple Voice Chat client. The Jockey Radio jar is
 **not** required on the client.
@@ -81,9 +81,8 @@ ambient beds, event music, a fixed track. A file plays continuously rather than 
 ### Platform links (opt-in, off by default)
 An off-by-default option (`enablePlatformLinks`) that ships with the mod but is **not an advertised or
 promoted feature**. When an operator enables it, yt-dlp resolves a supported page link to a playable
-stream (a bundled `deno` provides the JS runtime some sites need). YouTube links are not supported
-and are refused. The resolver is otherwise generic (it hands the link to yt-dlp); support and
-reliability vary by site, and some block datacenter IPs.
+stream. YouTube links are not supported and are refused. The resolver is otherwise generic (it hands
+the link to yt-dlp); support and reliability vary by site, and some block datacenter IPs.
 
 > ### ⚠️ Read before enabling platform links
 > Pulling a third-party stream into your server and playing it to others may be governed by **that
@@ -115,7 +114,7 @@ ones you are most likely to touch:
 ```jsonc
 {
   "enablePlatformLinks": false,   // opt-in platform-link resolution, off by default (see the warning above)
-  "useBundledBinaries": true,     // self-extract the bundled ffmpeg/yt-dlp/deno (linux/amd64)
+  "useBundledBinaries": true,     // self-extract the bundled ffmpeg/yt-dlp (linux/windows amd64)
   "adminPermissionLevel": 3,      // op level required by /jockey (0..4)
   "nowPlayingHud": true,          // the NOW-PLAYING boss bar
   "nowPlayingHudMode": "beacon",  // "beacon" (needs a trigger block nearby) or "always"
@@ -154,7 +153,7 @@ should validate capacity on their own hosting tier before using Jockey Radio for
 
 - Audio delivery uses the **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat)** plugin
   API by Max Henkel (a declared dependency, invoked via its API; none of its code is bundled).
-- Bundled binaries: **ffmpeg** (LGPL build), **yt-dlp** (Unlicense), **deno** (MIT); the pure-Java
+- Bundled binaries: **ffmpeg** (LGPL build) and **yt-dlp** (Unlicense); the pure-Java
   **Concentus** Opus encoder is included jar-in-jar. Full notices and license texts ship in
   `THIRD-PARTY-NOTICES.txt` inside the jar.
 - **Jockey Radio** is a **GBTI** project, with **SavePoint** as an optional featured broadcasting
