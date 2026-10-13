@@ -307,16 +307,16 @@ public final class MonitorService {
 	private static Component buildName(String discName, boolean receiving, String title, String artist) {
 		MutableComponent name = Component.literal("♪ Monitoring ").append(Component.literal(discName));
 		if (!receiving) {
-			return name.append(Component.literal(" - waiting for stream"));
+			return name.append(Component.literal(" · waiting for stream"));
 		}
 		if (title != null && !title.isBlank()) {
-			StringBuilder track = new StringBuilder(" - ").append(title);
+			StringBuilder track = new StringBuilder(" · ").append(title);
 			if (artist != null && !artist.isBlank()) {
-				track.append(" - ").append(artist);
+				track.append(" · ").append(artist);
 			}
 			return name.append(Component.literal(track.toString()));
 		}
-		return name.append(Component.literal(" - receiving"));
+		return name.append(Component.literal(" · receiving"));
 	}
 
 	private static List<UUID> lazy(List<UUID> list) {

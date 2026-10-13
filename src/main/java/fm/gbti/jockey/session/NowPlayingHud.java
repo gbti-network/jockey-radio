@@ -555,7 +555,7 @@ public final class NowPlayingHud {
 		// precedence over the LIVE/track text - there is no audio to describe mid
 		// pre-roll/re-anchor. Falls back to the normal text once streaming resumes.
 		if (buffering) {
-			return name.append(Component.literal(" — buffering…"));
+			return name.append(Component.literal(" · buffering…"));
 		}
 		// sow-006 review-feedback: the "on air"/LIVE/idle status is shown only for a truly-live
 		// source (a live HLS station, an RTMP publisher, or a live platform stream). A non-live
@@ -570,7 +570,7 @@ public final class NowPlayingHud {
 			// non-live platform VOD is delivering frames while it plays, so both fall through to the
 			// bare name.
 			if (liveExpecting && !receiving) {
-				return name.append(Component.literal(" — ○ off air"));
+				return name.append(Component.literal(" · ○ off air"));
 			}
 			return name;
 		}
@@ -586,7 +586,7 @@ public final class NowPlayingHud {
 						return Component.literal(rendered);
 					}
 				}
-				MutableComponent line = name.append(Component.literal(" — LIVE — ")).append(Component.literal(title));
+				MutableComponent line = name.append(Component.literal(" · LIVE · ")).append(Component.literal(title));
 				String artist = np.artist();
 				if (artist != null && !artist.isBlank()) {
 					line.append(Component.literal(" · ")).append(Component.literal(artist));
@@ -598,15 +598,15 @@ public final class NowPlayingHud {
 			if ("relay".equals(source) || "master-key".equals(source)) {
 				String segment = np.segment();
 				if (segment != null && !segment.isBlank()) {
-					return name.append(Component.literal(" — LIVE ("))
+					return name.append(Component.literal(" · LIVE ("))
 							.append(Component.literal(segment))
 							.append(Component.literal(" · live DJ)"));
 				}
-				return name.append(Component.literal(" — LIVE (live DJ)"));
+				return name.append(Component.literal(" · LIVE (live DJ)"));
 			}
 		}
 		// Feed-state fallback: receiving audio vs a bound-but-silent feed.
-		return name.append(Component.literal(receiving ? " — ● on air" : " — ○ idle"));
+		return name.append(Component.literal(receiving ? " · ● on air" : " · ○ idle"));
 	}
 
 	/** Placeholders substituted in a per-disc marquee template; unknown {tokens} stay literal. */

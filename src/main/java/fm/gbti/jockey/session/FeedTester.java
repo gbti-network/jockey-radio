@@ -127,7 +127,7 @@ public final class FeedTester {
 			PROBE_EXECUTOR.execute(task);
 		} catch (RejectedExecutionException rejected) {
 			onResult.accept(new Result("Test busy",
-					"Too many feed tests are running at once - try again in a moment."));
+					"Too many feed tests are running at once. Try again in a moment."));
 		}
 	}
 
@@ -163,14 +163,14 @@ public final class FeedTester {
 			int code = response.statusCode();
 			return switch (code) {
 				case 200, 206 -> new Result("Feed reachable",
-						"HTTP " + code + " - the trunk URL is reachable.\n" + shown);
+						"HTTP " + code + ": the trunk URL is reachable.\n" + shown);
 				case 404 -> new Result("Station idle",
-						"HTTP 404 - the station is idle (not an error; an idle SavePoint station "
+						"HTTP 404: the station is idle (not an error; an idle SavePoint station "
 								+ "answers 404 until it goes live).\n" + shown);
 				case 401 -> new Result("Token required",
-						"HTTP 401 - an access token is required or the configured one is invalid.\n" + shown);
+						"HTTP 401: an access token is required or the configured one is invalid.\n" + shown);
 				case 403 -> new Result("Access denied",
-						"HTTP 403 - access denied (token invalid or not permitted).\n" + shown);
+						"HTTP 403: access denied (token invalid or not permitted).\n" + shown);
 				default -> new Result("Unexpected response",
 						"HTTP " + code + " from the trunk URL.\n" + shown);
 			};

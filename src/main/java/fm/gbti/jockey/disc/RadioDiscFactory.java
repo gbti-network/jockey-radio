@@ -110,7 +110,7 @@ public final class RadioDiscFactory {
 
 		MutableComponent name = Component.literal(displayName)
 				.withStyle(style -> style.withColor(TextColor.fromRgb(NAME_COLOR)).withItalic(false))
-				.append(Component.literal(" — Jockey Radio")
+				.append(Component.literal(" · Jockey Radio")
 						.withStyle(style -> style.withColor(TextColor.fromRgb(LORE_COLOR)).withItalic(false)));
 		stack.set(DataComponents.ITEM_NAME, name);
 

@@ -154,7 +154,7 @@ public final class RadioCommands {
 				"Healed " + result.healed() + " disc(s) of " + result.discSessions()
 						+ " active registry disc(s)"
 						+ (result.unreachable() > 0
-								? " (" + result.unreachable() + " in unloaded chunks - move nearer and re-run)"
+								? " (" + result.unreachable() + " in unloaded chunks; move nearer and re-run)"
 								: "")
 						+ "."), true);
 		return result.healed();
@@ -359,7 +359,7 @@ public final class RadioCommands {
 		DiscRegistry.get().reload();
 		int count = DiscRegistry.get().size();
 		String tail = DiscRegistry.get().isReadOnly()
-				? " disc(s) - but " + DiscRegistry.FILE_NAME + " could not be fully read, so SAVING IS DISABLED. "
+				? " disc(s), but " + DiscRegistry.FILE_NAME + " could not be fully read, so SAVING IS DISABLED. "
 						+ "Fix or remove that file, then reload again."
 				: " disc(s).";
 		source.sendSuccess(() -> Component.literal("Reloaded disc registry: " + count + tail), true);

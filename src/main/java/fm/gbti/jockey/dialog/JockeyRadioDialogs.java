@@ -175,7 +175,7 @@ public final class JockeyRadioDialogs {
 		List<DialogBody> body = new ArrayList<>();
 		discIconBody(registries, brandDef(), 24).ifPresent(body::add);
 		body.add(body(Lang.tr("jockey_radio.menu.body",
-				"Admin console - create and manage streaming radio discs.")));
+				"Create and manage streaming radio discs.")));
 
 		// sow-014: a 3-item hub. Give lives inside Manage (each disc's detail page has a Give
 		// button), and registry reload stays available as the /jockey reload console command -
@@ -254,7 +254,7 @@ public final class JockeyRadioDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this HLS stream disc."))
 				: body(Lang.tr("jockey_radio.form.pull.body_create",
-						"New stream disc - the server plays any stream URL (a SavePoint station, an m3u8 playlist, an icecast/http stream, ...).")));
+						"New stream disc. The server plays any stream URL: a SavePoint station, an m3u8 playlist or an Icecast/HTTP stream.")));
 		body.add(body(colorNote()));
 		// Token hint for the marquee field below (its label is kept short so the box centers).
 		body.add(body(note("Marquee tokens: {station} {title} {artist} {segment}")));
@@ -326,7 +326,7 @@ public final class JockeyRadioDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this file disc."))
 				: body(Lang.tr("jockey_radio.form.file.body_create",
-						"New file disc - the server loops a finite audio file reached over HTTP (a direct link, or a file in the audio folder).")));
+						"New file disc. The server loops an audio file reached over HTTP (a direct link, or a file in the audio folder).")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();
@@ -477,7 +477,7 @@ public final class JockeyRadioDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this RTMP receive disc."))
 				: body(Lang.tr("jockey_radio.form.rtmp.body_create",
-						"New RTMP receive disc - a DJ/OBS/relay publishes into the server.")));
+						"New RTMP receive disc. A DJ, OBS or a relay publishes into the server.")));
 		// The admin configuring SavePoint/OBS needs the ingest shape BEFORE saving; the exact
 		// copyable URLs (with the real host and key) appear on the disc's detail page after save.
 		if (!edit) {
@@ -606,7 +606,7 @@ public final class JockeyRadioDialogs {
 		}
 		if (discs.isEmpty()) {
 			body.add(body(Lang.tr("jockey_radio.manage.empty",
-					"No discs yet - use + New disc to add one.")));
+					"No discs yet. Use + New disc to add one.")));
 		} else {
 			body.add(body(Component.literal(discs.size()
 					+ " disc(s). Click one to edit, test, connect, or give.")));
@@ -687,7 +687,7 @@ public final class JockeyRadioDialogs {
 					actions.add(copyButton(Lang.tr("jockey_radio.copy.ext_full", "Copy external full URL"),
 							ext.get().fullUrl()));
 				} else {
-					body.add(body(note("Binds 0.0.0.0 but no rtmpPublicHost is set - set rtmpPublicHost "
+					body.add(body(note("Binds 0.0.0.0 but no rtmpPublicHost is set. Set rtmpPublicHost "
 							+ "in jockey_radio.json to also show an external ingest URL.")));
 				}
 			} else {
@@ -736,7 +736,7 @@ public final class JockeyRadioDialogs {
 		List<DialogBody> body = new ArrayList<>();
 		discIconBody(registries, def, 24).ifPresent(body::add);
 		body.add(body(Component.literal(
-				"Listen now - the feed is playing into your voice chat. A level meter shows on your boss bar.")));
+				"Listen now. The feed is playing into your voice chat, and a level meter shows on your boss bar.")));
 		if (hint != null && !hint.isBlank()) {
 			body.add(body(note(hint)));
 		}
@@ -956,8 +956,8 @@ public final class JockeyRadioDialogs {
 
 	/**
 	 * The rich now-playing line for the disc detail page. With a live now-playing
-	 * snapshot: {@code ● LIVE - <title> - <artist>} (green) plus a muted
-	 * {@code (<segment> - live DJ)} for a relay/master-key takeover or
+	 * snapshot: {@code ● LIVE · <title> · <artist>} (green) plus a muted
+	 * {@code (<segment>, live DJ)} for a relay/master-key takeover or
 	 * {@code (scheduled)} for the master schedule. A not-live snapshot renders
 	 * {@code ○ idle}. With no snapshot (poller off, an RTMP disc, the disc not
 	 * placed in a jukebox, or not yet polled) it falls back to the shared feed-state
@@ -974,9 +974,9 @@ public final class JockeyRadioDialogs {
 		MutableComponent line = Component.literal("● LIVE")
 				.withStyle(s -> s.withColor(TextColor.fromRgb(LIVE_COLOR)));
 		if (np.title() != null) {
-			StringBuilder track = new StringBuilder(" - ").append(np.title());
+			StringBuilder track = new StringBuilder(" · ").append(np.title());
 			if (np.artist() != null) {
-				track.append(" - ").append(np.artist());
+				track.append(" · ").append(np.artist());
 			}
 			// Literal concatenation (never a %s format): an untrusted title/artist
 			// containing '%' can never break formatting.
@@ -1008,7 +1008,7 @@ public final class JockeyRadioDialogs {
 		}
 		String segment = np.segment();
 		if (segment != null && tag != null) {
-			return segment + " - " + tag;
+			return segment + ", " + tag;
 		}
 		return segment != null ? segment : tag;
 	}
@@ -1293,7 +1293,7 @@ public final class JockeyRadioDialogs {
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
 				Optional.of(Lang.tr("jockey_radio.button.cycle_color_tip",
-						"Change the disc name colour - the preview updates instantly")), 220),
+						"Change the disc name colour (the preview updates instantly)")), 220),
 				Optional.of(action));
 	}
 
@@ -1314,7 +1314,7 @@ public final class JockeyRadioDialogs {
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
 				Optional.of(Lang.tr("jockey_radio.button.cycle_style_tip",
-						"Change the disc's item style - the preview icon updates instantly")), 220),
+						"Change the disc's item style (the preview icon updates instantly)")), 220),
 				Optional.of(action));
 	}
 
@@ -1335,7 +1335,7 @@ public final class JockeyRadioDialogs {
 				.append(Component.literal(" ▶"));
 		return new ActionButton(new CommonButtonData(label,
 				Optional.of(Lang.tr("jockey_radio.button.cycle_name_style_tip",
-						"Change the display-name font style - the preview updates instantly")), 220),
+						"Change the display-name font style (the preview updates instantly)")), 220),
 				Optional.of(action));
 	}
 
@@ -1406,7 +1406,7 @@ public final class JockeyRadioDialogs {
 
 	/** The muted body note explaining how the preview refreshes on this form. */
 	private static Component colorNote() {
-		return note("Click \"Name color\" or \"Item style\" to restyle the disc - the preview above "
+		return note("Click \"Name color\" or \"Item style\" to restyle the disc. The preview above "
 				+ "updates instantly. Typed fields (name, URL) refresh in the preview on any button press.");
 	}
 

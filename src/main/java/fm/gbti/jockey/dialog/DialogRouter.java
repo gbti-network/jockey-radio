@@ -476,7 +476,7 @@ public final class DialogRouter {
 			if (DiscRegistry.get().get(normalizedId).isPresent()) {
 				// Back to the SAME form with everything still filled in, not a blank one.
 				DialogScreens.send(player, JockeyRadioDialogs.errorThenForm("Disc already exists",
-						"A disc '" + safe(normalizedId) + "' already exists - use Manage to edit it.", tag.copy()));
+						"A disc '" + safe(normalizedId) + "' already exists. Use Manage to edit it.", tag.copy()));
 				return;
 			}
 		}
@@ -682,13 +682,13 @@ public final class DialogRouter {
 					def.get().discId));
 			case NO_CONNECTION -> DialogScreens.send(player, JockeyRadioDialogs.noticeThenDetail(
 					"Voice chat not connected",
-					"Connect to Simple Voice Chat first - the monitor plays into your voice chat, "
+					"Connect to Simple Voice Chat first. The monitor plays into your voice chat, "
 							+ "so you must be connected to hear it.",
 					def.get().discId));
 			case NO_DISC -> DialogScreens.send(player, JockeyRadioDialogs.errorThen("Unknown disc",
 					"No disc '" + safe(discId) + "'.", "manage", ""));
 			default -> DialogScreens.send(player, JockeyRadioDialogs.noticeThenDetail(
-					"Monitor failed", "The monitor could not start - see the server log.", def.get().discId));
+					"Monitor failed", "The monitor could not start. See the server log.", def.get().discId));
 		}
 	}
 
@@ -698,7 +698,7 @@ public final class DialogRouter {
 		String discId = tag.getStringOr("id", "");
 		if (!discId.isEmpty() && DiscRegistry.get().get(discId).isPresent()) {
 			DialogScreens.send(player, JockeyRadioDialogs.noticeThenDetail(
-					"Monitor stopped", "Stopped monitoring - the level meter is gone.", discId));
+					"Monitor stopped", "Stopped monitoring. The level meter is gone.", discId));
 		} else {
 			DialogScreens.send(player, JockeyRadioDialogs.noticeThen(
 					"Monitor stopped", "Stopped monitoring.", "manage"));
@@ -717,9 +717,9 @@ public final class DialogRouter {
 			return "Feed is receiving audio now.";
 		}
 		if (def.sourceType == DiscDefinition.SourceType.RTMP_RECEIVE) {
-			return "Waiting for a broadcaster to publish to the RTMP listener - you'll hear silence until then.";
+			return "Waiting for a broadcaster to publish to the RTMP listener. You'll hear silence until then.";
 		}
-		return "Waiting for the stream - if the station is idle you'll hear silence until it goes live.";
+		return "Waiting for the stream. If the station is idle, you'll hear silence until it goes live.";
 	}
 
 	private static void handleGive(ServerPlayer player, CompoundTag tag) {

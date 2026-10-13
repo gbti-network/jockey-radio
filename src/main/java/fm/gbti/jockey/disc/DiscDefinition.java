@@ -348,7 +348,7 @@ public final class DiscDefinition {
 			return Optional.of("host must be at most 128 characters");
 		}
 		if (host.contains("://") || host.contains("/")) {
-			return Optional.of("host must be a bare host[:port] - no scheme, no path");
+			return Optional.of("host must be a bare host[:port], with no scheme or path");
 		}
 		java.util.regex.Matcher m = HOST_AUTHORITY.matcher(host);
 		if (!m.matches()) {
@@ -539,7 +539,7 @@ public final class DiscDefinition {
 		// with a clear message rather than letting the disc fail invisibly; use
 		// 1936 (the known-free port) instead.
 		if (rtmpPort == 1935) {
-			return Optional.of("rtmpPort 1935 is reserved by the SavePoint server - use another port (e.g. 1936)");
+			return Optional.of("rtmpPort 1935 is reserved by the SavePoint server; use another port (e.g. 1936)");
 		}
 		if (streamKey == null || !STREAM_KEY.matcher(streamKey).matches()) {
 			return Optional.of("streamKey must be [A-Za-z0-9_-]{1,64}");

@@ -293,7 +293,7 @@ public final class DiscRegistry {
 				discs.remove(def.discId);
 			}
 			return Optional.of("could not write " + FILE_NAME + " (" + writeError
-					+ ") - the disc was NOT saved; free space or fix permissions and try again");
+					+ "), so the disc was NOT saved. Free space or fix permissions and try again");
 		}
 		fireChanged();
 		return Optional.empty();
@@ -321,7 +321,7 @@ public final class DiscRegistry {
 			}
 			if (bindsClash(def.rtmpBind, other.rtmpBind)) {
 				return Optional.of("RTMP " + def.rtmpBind + ":" + def.rtmpPort + " is already used by disc '"
-						+ other.discId + "' - only one disc can listen on an address. Pick another port.");
+						+ other.discId + "'. Only one disc can listen on an address, so pick another port.");
 			}
 		}
 		return Optional.empty();
@@ -356,7 +356,7 @@ public final class DiscRegistry {
 		if (writeError != null) {
 			discs.put(discId, previous);
 			return Optional.of("could not write " + FILE_NAME + " (" + writeError
-					+ ") - the disc was NOT deleted; free space or fix permissions and try again");
+					+ "), so the disc was NOT deleted. Free space or fix permissions and try again");
 		}
 		fireChanged();
 		return Optional.empty();
