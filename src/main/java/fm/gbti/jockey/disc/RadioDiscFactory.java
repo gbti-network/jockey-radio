@@ -156,10 +156,11 @@ public final class RadioDiscFactory {
 				.withStyle(style -> style.withColor(TextColor.fromRgb(color)).withItalic(false));
 		stack.set(DataComponents.ITEM_NAME, name);
 
-		// Source-type badge line (mockup colours: stream cyan / RTMP gold / file green). Feed
-		// details (host/token/key) stay server-side and NEVER enter item NBT - only the
-		// non-secret source KIND is shown here, brand-neutral: a pulled stream may be a SavePoint
-		// station or any other HLS/platform source, so the badge never claims "SavePoint".
+		// Source-type badge line, in the same colours as the dialog badges (stream cyan, RTMP
+		// gold, file purple, platform red). Feed details (host/token/key) stay server-side and
+		// NEVER enter item NBT - only the non-secret source KIND is shown here, brand-neutral: a
+		// pulled stream may be a SavePoint station or any other HLS source, so the badge never
+		// claims "SavePoint".
 		String sourceLabel;
 		int sourceColor;
 		switch (def.sourceType) {
@@ -168,8 +169,12 @@ public final class RadioDiscFactory {
 				sourceColor = 0xFFB84D;
 			}
 			case FILE -> {
-				sourceLabel = "Looping file";
-				sourceColor = 0x9BE88F;
+				sourceLabel = "Audio file";
+				sourceColor = 0xC792EA;
+			}
+			case PLATFORM -> {
+				sourceLabel = "Platform link";
+				sourceColor = 0xF07178;
 			}
 			default -> {
 				sourceLabel = "Live stream";
