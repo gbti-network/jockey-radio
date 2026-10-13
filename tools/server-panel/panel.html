@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jockey Radio - Dev Server Panel</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0f1216; color:#d7dde4; margin:0; padding:2rem 1rem;
+         font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:60rem; margin:0 auto; }
+  h1 { font-size:1.3rem; margin:0 0 1rem; }
+  h2 { font-size:1rem; margin:1.5rem 0 .5rem; }
+  .badge { padding:.15rem .65rem; border-radius:999px; font-weight:600;
+           text-transform:uppercase; font-size:.75rem; letter-spacing:.06em; }
+  .badge.stopped  { background:#3a4351; color:#c3ccd8; }
+  .badge.starting { background:#7a5b13; color:#ffd98a; }
+  .badge.running  { background:#1d5c33; color:#9ff0bb; }
+  .badge.crashed  { background:#6b2027; color:#ffb3ba; }
+  button { background:#2a3342; color:#e6ecf3; border:1px solid #3d4a5d;
+           border-radius:6px; padding:.45rem 1.1rem; font-size:.95rem;
+           cursor:pointer; margin-right:.4rem; }
+  button:hover:not(:disabled) { background:#37455c; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #eula { border:1px solid #7a5b13; background:#241c09; border-radius:8px;
+          padding:1rem; margin:1rem 0; }
+  #eula a { color:#ffd98a; }
+  pre#log { background:#090b0e; border:1px solid #232b36; border-radius:8px;
+            padding:1rem; max-height:24rem; overflow:auto; font-size:.8rem;
+            white-space:pre-wrap; }
+  ul#doctor { color:#ffb3ba; }
+  .meta { color:#8b96a5; font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Jockey Radio - Dev Server Panel</h1>
+  <p>
+    <span id="badge" class="badge stopped">stopped</span>
+    <span id="meta" class="meta"></span>
+  </p>
+  <p>
+    <button id="btnStart">Start</button>
+    <button id="btnStop" disabled>Stop</button>
+    <button id="btnRestart" disabled>Restart</button>
+    <span id="msg" class="meta"></span>
+  </p>
+  <ul id="doctor"></ul>
+  <section id="eula" hidden>
+    <strong>Minecraft EULA not accepted.</strong>
+    <p>The dedicated server refuses to run until <code>.server/eula.txt</code>
+       contains <code>eula=true</code>. Read the
+       <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">Minecraft EULA</a>.
+       If <code>eula.txt</code> does not exist yet, press Start once to
+       generate it, then accept below.</p>
+    <button id="btnEula">I accept the Minecraft EULA</button>
+  </section>
+  <h2>Log tail (logs/latest.log)</h2>
+  <pre id="log"></pre>
+</main>
+<script>
+"use strict";
+var $ = function (id) { return document.getElementById(id); };
+
+function fmtUptime(s) {
+  s = Math.floor(s);
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return (h ? h + "h " : "") + ((h || m) ? m + "m " : "") + sec + "s";
+}
+
+var msgSetAt = 0;
+function setMsg(text) {
+  $("msg").textContent = text;
+  msgSetAt = Date.now();
+}
+
+function refreshStatus() {
+  fetch("/status").then(function (r) { return r.json(); }).then(function (s) {
+    var badge = $("badge");
+    badge.textContent = s.state;
+    badge.className = "badge " + s.state;
+    $("meta").textContent =
+      (s.pid ? "pid " + s.pid + " | up " + fmtUptime(s.uptime_s) : "")
+      + (s.stopping ? " | stopping..." : "");
+    var live = s.state === "starting" || s.state === "running";
+    $("btnStart").disabled = live || s.stopping;
+    $("btnStop").disabled = !live || s.stopping;
+    $("btnRestart").disabled = !live || s.stopping;
+    // Hide the EULA section while a boot is in flight: during the eula-gate
+    // first boot the file does not exist yet, so accepting cannot work.
+    $("eula").hidden = s.eula_accepted || s.state === "starting";
+    var doctor = $("doctor");
+    doctor.textContent = "";
+    s.doctor.messages.forEach(function (m) {
+      var li = document.createElement("li");
+      li.textContent = m;
+      doctor.appendChild(li);
+    });
+    // Age out button-click messages so stale errors do not contradict the
+    // (now green) live state indefinitely.
+    if ($("msg").textContent && Date.now() - msgSetAt > 15000) {
+      $("msg").textContent = "";
+    }
+  }).catch(function () { /* panel unreachable; keep last view */ });
+}
+
+function refreshLogs() {
+  fetch("/logs?tail=200").then(function (r) { return r.text(); }).then(function (text) {
+    var log = $("log");
+    var pinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+    log.textContent = text;
+    if (pinned) log.scrollTop = log.scrollHeight;
+  }).catch(function () {});
+}
+
+function post(path) {
+  fetch(path, { method: "POST" }).then(function (r) { return r.json(); })
+    .then(function (j) {
+      setMsg(j.message || "");
+      refreshStatus();
+    })
+    .catch(function () { setMsg("request failed"); });
+}
+
+$("btnStart").onclick = function () { post("/start"); };
+$("btnStop").onclick = function () { post("/stop"); };
+$("btnRestart").onclick = function () { post("/restart"); };
+$("btnEula").onclick = function () {
+  if (confirm("Accept the Minecraft EULA? This writes eula=true to .server/eula.txt.")) {
+    post("/accept-eula");
+  }
+};
+
+refreshStatus();
+refreshLogs();
+setInterval(refreshStatus, 2000);
+setInterval(refreshLogs, 3000);
+</script>
+</body>
+</html>
