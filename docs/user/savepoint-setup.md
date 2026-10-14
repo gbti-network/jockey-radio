@@ -192,10 +192,14 @@ client's SVC audio engine is currently playing its spatial channel.
 If the HUD says on air but you hear nothing:
 
 1. Confirm normal SVC voice chat works.
-2. Check that the Jockey Radio/SVC volume category is not muted.
-3. Open SVC audio settings and toggle **3D Audio** away and back.
-4. Eject and reinsert the disc.
-5. Reconnect the client.
+2. Check SVC's output device. SVC chooses its speaker separately from Minecraft, so game sounds can
+   play in your headphones while the radio plays on your speakers. Press **V**, open the settings and
+   set the output device to your headphones. If they were plugged in after Minecraft started,
+   restart Minecraft so SVC lists them.
+3. Check that the Jockey Radio/SVC volume category is not muted.
+4. Open SVC audio settings and toggle **3D Audio** away and back.
+5. Eject and reinsert the disc.
+6. Reconnect the client.
 
 During live Modrinth testing, toggling 3D Audio immediately restored an already-running feed. That
 points to SVC client spatial-audio initialization rather than an RTMP failure.
