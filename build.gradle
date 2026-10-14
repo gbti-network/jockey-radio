@@ -32,6 +32,10 @@ dependencies {
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
+	// The API version, not the mod version. fabric.mod.json requires the voicechat mod >=2.6.21,
+	// and SVC 2.6.21 bundles voicechat-api-2.6.20 (the API is only published when it changes:
+	// 2.6.19, 2.6.20, then 2.6.24). Compiling against a newer API than the oldest supported mod
+	// ships would let code call methods a 2.6.21 server does not have. Raise both together.
 	compileOnly 'de.maxhenkel.voicechat:voicechat-api:2.6.20'
 
 	// Pure-Java Opus encoder we control, so OUR radio channels can encode at a
