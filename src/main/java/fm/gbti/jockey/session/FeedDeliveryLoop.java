@@ -42,18 +42,16 @@ final class FeedDeliveryLoop {
 	 * state; the ramp allocates a fresh frame (so a shared/dequeued frame is never
 	 * mutated) only on those 1-2 frames per resume.
 	 *
-	 * <p>By design only the RESUME edge (playing false-&gt;true) is ramped; the pause
-	 * ENTRY (playing true-&gt;false on a re-anchor or underrun) is NOT faded out. The
-	 * spec (Phase A, item 4) scopes the click-free treatment to the resume, where
-	 * pre-roll already makes recovery silent and the ramp makes it click-free. A
-	 * symmetric fade-out is deliberately omitted: the underrun path has no lookahead
-	 * (the last full real frame was already delivered a tick earlier, then silence
-	 * follows with nothing left to fade), so only the resume half can be ramped
-	 * consistently. WSOLA (Phase B) will smooth the pause edge; until then the pause
-	 * entry may carry a small click if the last sample sits far from a zero crossing
-	 * (a pre-existing Phase-4 property, not a Phase-A regression).</p>
+	 * <p>The pause edge (playing true-&gt;false) is smoothed too, because a step from the
+	 * last sample to silence is the same click. A re-anchor knows it is pausing on the tick
+	 * it delivers its last frame, so that frame is faded out ({@link #fadeOut}). An underrun
+	 * has no lookahead (the last real frame went out a tick earlier), so the first silent
+	 * frame instead decays from the last delivered sample to zero over
+	 * {@link #DECAY_TAIL_SAMPLES} ({@link #decayTail}).</p>
 	 */
 	private static final int RESUME_RAMP_FRAMES = 2;
+	/** Length of the underrun decay tail: 5&nbsp;ms at 48&nbsp;kHz. */
+	static final int DECAY_TAIL_SAMPLES = 240;
 
 	private static final long DROPS_WARN_PER_STATS_INTERVAL = 250L;
 
@@ -155,6 +153,8 @@ final class FeedDeliveryLoop {
 		// underrun, post re-anchor); counts down as each ramped frame is delivered, so
 		// the ramp fires ONLY on a resume and never in steady state.
 		int rampFramesLeft = 0;
+		// Last sample delivered, so an underrun can decay from it instead of stepping to zero.
+		short lastSample = 0;
 		// Consecutive PLAYING ticks the buffer has sat below the re-anchor low water
 		// (sow-005 Phase 4). Reset whenever occupancy recovers, on an underrun, and
 		// after a re-anchor fires, so only a SUSTAINED drain trips the re-anchor.
@@ -184,6 +184,8 @@ final class FeedDeliveryLoop {
 			// >= 0 only on the tick a controlled re-anchor fired: the buffered depth to
 			// log/record for it, outside bufferLock.
 			long reanchorBuffered = -1L;
+			// True on the tick playout runs dry (an underrun), for the decay tail.
+			boolean ranDry = false;
 
 			if (!playing) {
 				// PRE-ROLL: hold at silence, draining nothing, until the buffer has
@@ -209,16 +211,26 @@ final class FeedDeliveryLoop {
 					// resume and only those.
 					rampFramesLeft = RESUME_RAMP_FRAMES;
 					next = System.nanoTime();
-					stats.framesDelivered.incrementAndGet();
 					// sow-005 Phase B: discard any stale samples the stretcher's private ring
 					// held from before this preroll (a prior underrun/re-anchor left up to
-					// ~45 ms of pre-outage audio behind its cursor). Resetting here makes the
-					// stretch stream resume cleanly from the freshly-prerolled frames (its
-					// first output re-does the Hann fade-in, reinforcing the click-free
-					// resume ramp) instead of splicing stale audio before the new content.
-					// Harmless on a cold start (the ring is already empty).
+					// ~45 ms of pre-outage audio behind its cursor), so the stretch stream
+					// resumes from the freshly-prerolled frames instead of splicing stale audio
+					// before the new content. Harmless on a cold start (the ring is empty).
 					if (stretcher != null) {
 						stretcher.reset();
+					}
+					if (stretcher != null && !stretchFailed) {
+						// The stretcher's first output after a reset fades in from zero (its Hann
+						// window). Delivering this frame raw first meant audio, then a drop back
+						// toward silence: a click on every resume. Hand it back so the stretched
+						// stream starts with it, and hold silence for this one tick.
+						synchronized (feed.bufferLock) {
+							feed.buffer.addFirst(frame);
+						}
+						frame = silence;
+						stats.silenceFrames.incrementAndGet();
+					} else {
+						stats.framesDelivered.incrementAndGet();
 					}
 				} else {
 					frame = silence;
@@ -301,6 +313,7 @@ final class FeedDeliveryLoop {
 							frame = silence;
 							stats.silenceFrames.incrementAndGet();
 							playing = false;
+							ranDry = true;
 							stats.underruns.incrementAndGet();
 							stats.recordGlitchEvent();
 							belowLowTicks = 0L;
@@ -393,6 +406,7 @@ final class FeedDeliveryLoop {
 					frame = silence;
 					stats.silenceFrames.incrementAndGet();
 					playing = false;
+					ranDry = true;
 					stats.underruns.incrementAndGet();
 					// An underrun (playout ran dry -> silence + re-roll) is an audible
 					// discontinuity too; record it as one glitch event.
@@ -424,6 +438,13 @@ final class FeedDeliveryLoop {
 						feed.stationKey, reanchorBuffered, feed.reanchorLowWaterFrames, feed.reanchorSustainFrames);
 			}
 
+			// CLICK-FREE PAUSE EDGE: decay an underrun from the last sample, or fade out the
+			// frame a re-anchor pauses after (see RESUME_RAMP_FRAMES).
+			if (ranDry && lastSample != 0) {
+				frame = decayTail(lastSample);
+			} else if (reanchorBuffered >= 0L) {
+				frame = fadeOut(frame);
+			}
 			// CLICK-FREE RESUME RAMP (sow-005 Phase A, item 4): on the first
 			// RESUME_RAMP_FRAMES after a resume, deliver a fresh COPY of the frame
 			// scaled by a linear 0->full-gain envelope so the resume has no click.
@@ -446,6 +467,7 @@ final class FeedDeliveryLoop {
 					JockeyRadioMod.LOGGER.error("[jockey] sink accept failed station={}", feed.stationKey, t);
 				}
 			}
+			lastSample = frame[frame.length - 1];
 
 			long now = System.nanoTime();
 			if (now - lastOccupancy >= 1_000_000_000L) {
@@ -644,6 +666,33 @@ final class FeedDeliveryLoop {
 		for (int i = 0; i < FRAME_SAMPLES; i++) {
 			double gain = (double) (baseIndex + i + 1) / (double) totalSamples;
 			out[i] = (short) Math.round(src[i] * gain);
+		}
+		return out;
+	}
+
+	/**
+	 * A copy of {@code src} faded linearly from full gain to zero across the frame, for the last
+	 * frame before a re-anchor's pause. Never mutates {@code src}: a sink may retain it.
+	 */
+	static short[] fadeOut(short[] src) {
+		short[] out = new short[src.length];
+		for (int i = 0; i < src.length; i++) {
+			double gain = (double) (src.length - 1 - i) / (double) (src.length - 1);
+			out[i] = (short) Math.round(src[i] * gain);
+		}
+		return out;
+	}
+
+	/**
+	 * The first silent frame after an underrun: {@code last} (the final sample delivered)
+	 * decaying linearly to zero over {@link #DECAY_TAIL_SAMPLES}, then silence. Removes the
+	 * step from a non-zero sample straight to zero.
+	 */
+	static short[] decayTail(short last) {
+		short[] out = new short[FRAME_SAMPLES];
+		for (int i = 0; i < DECAY_TAIL_SAMPLES; i++) {
+			double gain = (double) (DECAY_TAIL_SAMPLES - 1 - i) / (double) DECAY_TAIL_SAMPLES;
+			out[i] = (short) Math.round(last * gain);
 		}
 		return out;
 	}
