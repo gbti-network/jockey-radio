@@ -9,10 +9,14 @@ import net.fabricmc.loader.api.FabricLoader;
 import java.io.IOException;
 import java.io.Reader;
 import java.lang.reflect.Type;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,9 +31,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * object.
  *
  * <p>Reads go through a {@link ConcurrentHashMap} (any thread); writes are
- * serialized on {@link #saveLock} and land atomically (temp file +
- * {@code Files.move ATOMIC_MOVE/REPLACE}) so a crash mid-write can never leave
- * a truncated registry behind. A malformed file is logged and treated as empty
+ * serialized on {@link #saveLock} and land atomically (temp file forced to disk, then
+ * {@code Files.move ATOMIC_MOVE/REPLACE}, then the directory forced) so a crash or power
+ * loss mid-write can never leave a truncated or empty registry behind. A malformed file is logged and treated as empty
  * - the server keeps running and the broken file on disk is left untouched.</p>
  */
 public final class DiscRegistry {
@@ -388,26 +392,75 @@ public final class DiscRegistry {
 		}
 		String json = GSON.toJson(snapshot, MAP_TYPE);
 		synchronized (saveLock) {
-			Path tmp = path.resolveSibling(FILE_NAME + ".tmp");
 			try {
-				Files.createDirectories(path.getParent());
-				Files.writeString(tmp, json);
-				try {
-					Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-				} catch (AtomicMoveNotSupportedException e) {
-					Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
-				}
+				writeDurably(path, json, Sync.DISK);
 				return null;
 			} catch (IOException e) {
 				JockeyRadioMod.LOGGER.error("[jockey] failed to write disc registry to {}", path, e);
-				// Don't leave a half-written temp beside the registry on the failure path.
-				try {
-					Files.deleteIfExists(tmp);
-				} catch (IOException ignored) {
-					// best-effort
-				}
 				return e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
 			}
+		}
+	}
+
+	/** The disk syncs a durable replace needs. Tests record them instead. */
+	interface Sync {
+		/** Forces the temp file's bytes to disk before it replaces the target. */
+		void file(FileChannel channel) throws IOException;
+
+		/** Forces the directory entry for the rename, where the platform can. */
+		void directory(Path dir);
+
+		Sync DISK = new Sync() {
+			@Override
+			public void file(FileChannel channel) throws IOException {
+				channel.force(true);
+			}
+
+			@Override
+			public void directory(Path dir) {
+				// POSIX needs the directory forced for the rename itself to survive a power cut.
+				// Windows cannot open a directory as a channel; NTFS journals the rename instead.
+				try (FileChannel d = FileChannel.open(dir, StandardOpenOption.READ)) {
+					d.force(true);
+				} catch (IOException | UnsupportedOperationException notSupported) {
+					// best-effort: the file itself is already on disk
+				}
+			}
+		};
+	}
+
+	/**
+	 * Replaces {@code target} with {@code content}: written to a temp file beside it, forced to
+	 * disk, moved over it, and the directory forced. Without the first force a power cut after
+	 * the rename can leave an empty discs.json, since the rename may reach the disk before the
+	 * data. A failure removes the temp file and leaves the target as it was.
+	 */
+	static void writeDurably(Path target, String content, Sync sync) throws IOException {
+		Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+		try {
+			Files.createDirectories(target.getParent());
+			try (FileChannel channel = FileChannel.open(tmp, StandardOpenOption.CREATE,
+					StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+				ByteBuffer bytes = StandardCharsets.UTF_8.encode(content);
+				while (bytes.hasRemaining()) {
+					channel.write(bytes);
+				}
+				sync.file(channel);
+			}
+			try {
+				Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+			sync.directory(target.getParent());
+		} catch (IOException e) {
+			// Don't leave a half-written temp beside the registry on the failure path.
+			try {
+				Files.deleteIfExists(tmp);
+			} catch (IOException ignored) {
+				// best-effort
+			}
+			throw e;
 		}
 	}
 }
