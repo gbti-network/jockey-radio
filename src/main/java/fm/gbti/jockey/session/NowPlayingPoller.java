@@ -9,20 +9,30 @@ import fm.gbti.jockey.disc.DiscDefinition;
 import fm.gbti.jockey.disc.DiscRegistry;
 import fm.gbti.jockey.disc.Origins;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * LIVE indicator plumbing. When {@link RadioConfig#nowPlayingPollSeconds} is
@@ -33,7 +43,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * active disc session with a resolvable endpoint (HLS and RTMP alike) and records a
  * {@link RadioSession.NowPlaying} snapshot (live flag, broadcast source, and the
  * current track title/artist/segment) so the boss bar and the admin disc-detail
- * dialog can show a rich LIVE line.
+ * dialog can show a rich LIVE line. Sessions on the same endpoint with the same bearer share
+ * one request, so ten jukeboxes on one station cost one GET per interval, and a response body
+ * over {@link #MAX_BODY_BYTES} is refused without reading the rest.
  *
  * <p>Set {@code nowPlayingPollSeconds == 0} to disable it. It is written to never
  * block the server thread and never spam: one log line when enabled, at most one
@@ -72,6 +84,11 @@ public final class NowPlayingPoller {
 	 * UNREACHABLE's self-healing twin for the reachable case.
 	 */
 	private static final int STALE_CLEAR_THRESHOLD = 3;
+	/**
+	 * Largest now-playing response read. SavePoint's answer is well under 2 KiB; the cap keeps
+	 * a hostile or broken endpoint from streaming into the server's heap.
+	 */
+	static final int MAX_BODY_BYTES = 64 * 1024;
 
 	private ScheduledExecutorService scheduler;
 	private volatile HttpClient client;
@@ -176,7 +193,7 @@ public final class NowPlayingPoller {
 			// and starve status/now-playing refresh for the sessions later in the list.
 			// Responses are then drained sequentially on THIS thread, so the per-session
 			// streak counters and the 401 log gate keep their single-thread invariant.
-			List<Pending> pending = new ArrayList<>();
+			List<Target> targets = new ArrayList<>();
 			for (RadioSession session : RadioManager.get().getSessions()) {
 				if (session.state() != RadioSession.State.ACTIVE || session.isInert()) {
 					continue;
@@ -192,15 +209,19 @@ public final class NowPlayingPoller {
 					session.setNowPlayingStatus(RadioSession.NowPlayingStatus.NO_ENDPOINT);
 					continue;
 				}
+				targets.add(new Target(session, def, url, bearerFor(def, url)));
+			}
+			List<Pending> pending = new ArrayList<>();
+			for (List<Target> group : byRequest(targets, Target::url, Target::bearer)) {
+				Target first = group.get(0);
 				try {
-					String bearer = bearerFor(def, url);
-					CompletableFuture<HttpResponse<String>> future = (bearer != null ? authHttp : http)
-							.sendAsync(buildRequest(url, bearer), HttpResponse.BodyHandlers.ofString());
-					pending.add(new Pending(session, def, future));
+					CompletableFuture<HttpResponse<String>> future = (first.bearer() != null ? authHttp : http)
+							.sendAsync(buildRequest(first.url(), first.bearer()), bodyHandler());
+					pending.add(new Pending(group, future));
 				} catch (Throwable submitFailure) {
 					// Bad URI / rejected submit (e.g. client shutting down): treat as
 					// unreachable and keep going - one bad disc never stops the others.
-					onUnreachable(session);
+					group.forEach(t -> onUnreachable(t.session()));
 				}
 			}
 			drain(pending);
@@ -211,9 +232,98 @@ public final class NowPlayingPoller {
 	}
 
 	/**
-	 * Waits on the in-flight per-session requests and processes each outcome on this
-	 * thread. Bounded by {@link #OVERALL_TIMEOUT} as a hard backstop; each request
-	 * carries its own 8s timeouts so the batch normally settles well before then.
+	 * The sessions that can share one request: same now-playing URL and same bearer, in
+	 * first-seen order. Generic so the grouping is testable without a running server.
+	 */
+	static <T> Collection<List<T>> byRequest(List<T> targets, Function<T, String> url, Function<T, String> bearer) {
+		Map<List<String>, List<T>> groups = new LinkedHashMap<>();
+		for (T target : targets) {
+			// A List key, not a joined string: the bearer is a secret and the pair must not
+			// collide however either half is spelled. Arrays.asList allows the null bearer.
+			List<String> key = java.util.Arrays.asList(url.apply(target), bearer.apply(target));
+			groups.computeIfAbsent(key, k -> new ArrayList<>()).add(target);
+		}
+		return groups.values();
+	}
+
+	/** Reads a now-playing body as UTF-8, failing once it passes {@link #MAX_BODY_BYTES}. */
+	static HttpResponse.BodyHandler<String> bodyHandler() {
+		return info -> new CappedBody(MAX_BODY_BYTES,
+				info.headers().firstValueAsLong("Content-Length").orElse(-1));
+	}
+
+	/** A response body larger than the poller reads. */
+	static final class BodyTooLargeException extends IOException {
+		BodyTooLargeException(int max) {
+			super("now-playing response is larger than " + max + " bytes");
+		}
+	}
+
+	/**
+	 * Collects the body up to a cap. Past it, the subscription is cancelled, which stops the
+	 * client reading and closes the connection, and the body fails with
+	 * {@link BodyTooLargeException}. A declared Content-Length over the cap fails at once.
+	 */
+	private static final class CappedBody implements HttpResponse.BodySubscriber<String> {
+		private final int max;
+		private final long declared;
+		private final CompletableFuture<String> result = new CompletableFuture<>();
+		private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+		private Flow.Subscription subscription;
+
+		CappedBody(int max, long declared) {
+			this.max = max;
+			this.declared = declared;
+		}
+
+		@Override
+		public CompletionStage<String> getBody() {
+			return result;
+		}
+
+		@Override
+		public void onSubscribe(Flow.Subscription s) {
+			subscription = s;
+			if (declared > max) {
+				s.cancel();
+				result.completeExceptionally(new BodyTooLargeException(max));
+				return;
+			}
+			s.request(Long.MAX_VALUE);
+		}
+
+		@Override
+		public void onNext(List<ByteBuffer> buffers) {
+			if (result.isDone()) {
+				return;
+			}
+			for (ByteBuffer b : buffers) {
+				if (bytes.size() + b.remaining() > max) {
+					subscription.cancel();
+					result.completeExceptionally(new BodyTooLargeException(max));
+					return;
+				}
+				byte[] chunk = new byte[b.remaining()];
+				b.get(chunk);
+				bytes.write(chunk, 0, chunk.length);
+			}
+		}
+
+		@Override
+		public void onError(Throwable t) {
+			result.completeExceptionally(t);
+		}
+
+		@Override
+		public void onComplete() {
+			result.complete(bytes.toString(StandardCharsets.UTF_8));
+		}
+	}
+
+	/**
+	 * Waits on the in-flight requests and processes each outcome on this thread, for every
+	 * session sharing that request. Bounded by {@link #OVERALL_TIMEOUT} as a hard backstop;
+	 * each request carries its own 8s timeouts so the batch normally settles well before then.
 	 */
 	private void drain(List<Pending> pending) {
 		long deadlineNanos = System.nanoTime() + OVERALL_TIMEOUT.toNanos();
@@ -223,7 +333,7 @@ public final class NowPlayingPoller {
 				long remaining = deadlineNanos - System.nanoTime();
 				if (remaining <= 0L) {
 					p.future().cancel(true);
-					onUnreachable(p.session());
+					p.targets().forEach(t -> onUnreachable(t.session()));
 					continue;
 				}
 				response = p.future().get(remaining, TimeUnit.NANOSECONDS);
@@ -234,19 +344,27 @@ public final class NowPlayingPoller {
 			} catch (TimeoutException timeout) {
 				// The backstop fired (should not normally happen): abandon this request.
 				p.future().cancel(true);
-				onUnreachable(p.session());
+				p.targets().forEach(t -> onUnreachable(t.session()));
 				continue;
 			} catch (Throwable networkFailure) {
+				if (networkFailure.getCause() instanceof BodyTooLargeException) {
+					// The host answered, but with more than a now-playing body can be: a broken or
+					// hostile endpoint. Count it like any other erroring response.
+					p.targets().forEach(t -> onStaleResponse(t.session(), t.def(), 200));
+					continue;
+				}
 				// ExecutionException wrapping connect-refused / request-timeout / IOException
 				// (localhost down, wrong port, DNS fail): the host is unreachable. Never
 				// spam - record the status and, after repeated failures, clear the snapshot.
-				onUnreachable(p.session());
+				p.targets().forEach(t -> onUnreachable(t.session()));
 				continue;
 			}
-			try {
-				handleResponse(p.session(), p.def(), response);
-			} catch (Throwable handleFailure) {
-				JockeyRadioMod.LOGGER.debug("[jockey] now-playing handle error", handleFailure);
+			for (Target t : p.targets()) {
+				try {
+					handleResponse(t.session(), t.def(), response);
+				} catch (Throwable handleFailure) {
+					JockeyRadioMod.LOGGER.debug("[jockey] now-playing handle error", handleFailure);
+				}
 			}
 		}
 	}
@@ -353,9 +471,12 @@ public final class NowPlayingPoller {
 		}
 	}
 
-	/** One in-flight per-session request awaiting its response. */
-	private record Pending(RadioSession session, DiscDefinition def,
-			CompletableFuture<HttpResponse<String>> future) {
+	/** One session to poll, with the endpoint and bearer it resolved to. */
+	private record Target(RadioSession session, DiscDefinition def, String url, String bearer) {
+	}
+
+	/** One in-flight request and every session waiting on its response. */
+	private record Pending(List<Target> targets, CompletableFuture<HttpResponse<String>> future) {
 	}
 
 	/**
