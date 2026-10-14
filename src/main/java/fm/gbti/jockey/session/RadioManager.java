@@ -201,6 +201,9 @@ public final class RadioManager {
 		if (server != null && !shuttingDown) {
 			checkServerThread("onDiscsChanged");
 			restarts = stopSessionsNeedingRebuild();
+			// A monitor of an edited disc that no jukebox is playing would otherwise keep the
+			// old feed registered, and the next jukebox to insert the disc would join it.
+			MonitorService.get().stopChanged();
 		}
 		// Always runs: it self-guards on `armed`, so the startup load is a no-op.
 		RtmpKeepAlive.get().onDiscsChanged();

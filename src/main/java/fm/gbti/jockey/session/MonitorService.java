@@ -113,7 +113,7 @@ public final class MonitorService {
 
 			int seconds = RadioConfig.get().monitorSeconds;
 			Monitor monitor = new Monitor(admin.getUUID(), discId, discName, source.key(),
-					feed, sink, bossBar, Math.max(1, seconds) * TICKS_PER_SECOND);
+					def.ingestFingerprint(), feed, sink, bossBar, Math.max(1, seconds) * TICKS_PER_SECOND);
 			monitors.put(admin.getUUID(), monitor);
 			JockeyRadioMod.LOGGER.info("[jockey] monitor start admin={} station={} seconds={}",
 					admin.getName().getString(), discId, seconds);
@@ -168,6 +168,25 @@ public final class MonitorService {
 		}
 		for (Map.Entry<UUID, Monitor> entry : new ArrayList<>(monitors.entrySet())) {
 			if (discId.equals(entry.getValue().discId)) {
+				stopByUuid(entry.getKey(), "disc changed");
+			}
+		}
+	}
+
+	/**
+	 * Stops every monitor whose disc was deleted or had its ingest settings edited since the
+	 * monitor started. {@link #stopForDisc} only covers discs a jukebox is playing; this covers
+	 * a monitor that is the feed's only holder, which would otherwise keep the old feed
+	 * registered for the next jukebox to join. Server thread.
+	 */
+	public void stopChanged() {
+		if (monitors.isEmpty()) {
+			return;
+		}
+		for (Map.Entry<UUID, Monitor> entry : new ArrayList<>(monitors.entrySet())) {
+			Monitor monitor = entry.getValue();
+			String now = DiscRegistry.get().get(monitor.discId).map(DiscDefinition::ingestFingerprint).orElse(null);
+			if (!monitor.fingerprint.equals(now)) {
 				stopByUuid(entry.getKey(), "disc changed");
 			}
 		}
@@ -330,6 +349,8 @@ public final class MonitorService {
 		final String discName;
 		/** Namespaced feed-registry key ({@code disc:<id>}) used to release the lease. */
 		final String feedKey;
+		/** The disc's ingest fingerprint when the monitor started. Contains secrets. */
+		final String fingerprint;
 		final StationFeed feed;
 		final MonitorChannel sink;
 		final ServerBossEvent bossBar;
@@ -338,12 +359,13 @@ public final class MonitorService {
 		/** Last boss-bar name descriptor, so the name packet is only resent when it changes. */
 		String lastNameKey = "";
 
-		Monitor(UUID adminUuid, String discId, String discName, String feedKey,
+		Monitor(UUID adminUuid, String discId, String discName, String feedKey, String fingerprint,
 				StationFeed feed, MonitorChannel sink, ServerBossEvent bossBar, int remainingTicks) {
 			this.adminUuid = adminUuid;
 			this.discId = discId;
 			this.discName = discName;
 			this.feedKey = feedKey;
+			this.fingerprint = fingerprint;
 			this.feed = feed;
 			this.sink = sink;
 			this.bossBar = bossBar;
