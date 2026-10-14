@@ -1,19 +1,9 @@
 package fm.gbti.jockey.session;
 
 import fm.gbti.jockey.JockeyRadioMod;
-import fm.gbti.jockey.config.RadioConfig;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -21,8 +11,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,49 +44,12 @@ import java.util.regex.Pattern;
 public abstract class AbstractFfmpegFeed implements StationFeed {
 
 	protected static final int FRAME_SAMPLES = 960;
-	private static final int FRAME_BYTES = FRAME_SAMPLES * 2;
-	private static final long FRAME_NANOS = 20_000_000L;
-	private static final long FRAME_MILLIS = 20L;
-	/** Behind by more than this after a stall: resync to now instead of bursting. */
-	private static final long MAX_CATCHUP_LAG_NANOS = 200_000_000L;
-	private static final int STDERR_TAIL_LINES = 40;
-	private static final long STATS_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30);
-	/**
-	 * How long a live-but-silent ffmpeg is tolerated before {@link #checkIngestStall()}
-	 * restarts the connection. Comfortably above the per-feed {@code -rw_timeout} so the
-	 * socket-level guard fires first and this stays a genuine backstop.
-	 */
-	private static final long INGEST_STALL_NANOS = TimeUnit.SECONDS.toNanos(60);
-	/** Wall-clock-minus-monotonic gap (ms) at/above which a delivery-loop tick counts as a host/VM freeze. */
-	private static final long HOST_FREEZE_THRESHOLD_MS = 100L;
-	/** Healthy-streaming streak that resets the reconnect backoff. */
-	private static final long HEALTHY_STREAK_NANOS = TimeUnit.SECONDS.toNanos(30);
-	private static final long INITIAL_BACKOFF_SECONDS = 2L;
-	/**
-	 * Click-free resume ramp length in frames (sow-005 Phase A, item 4). Every
-	 * playout resume from a preroll / re-anchor / reconnect (the single
-	 * {@code playing} false-&gt;true transition) linearly ramps the s16 samples of the
-	 * first {@code RESUME_RAMP_FRAMES} delivered frames from 0 to full gain so the
-	 * resume carries no click. 2 frames = ~40&nbsp;ms at {@link #FRAME_NANOS}, inside
-	 * the 20-50&nbsp;ms window. Applied ONLY on the resume transition, never in steady
-	 * state; the ramp allocates a fresh frame (so a shared/dequeued frame is never
-	 * mutated) only on those 1-2 frames per resume.
-	 *
-	 * <p>By design only the RESUME edge (playing false-&gt;true) is ramped; the pause
-	 * ENTRY (playing true-&gt;false on a re-anchor or underrun) is NOT faded out. The
-	 * spec (Phase A, item 4) scopes the click-free treatment to the resume, where
-	 * pre-roll already makes recovery silent and the ramp makes it click-free. A
-	 * symmetric fade-out is deliberately omitted: the underrun path has no lookahead
-	 * (the last full real frame was already delivered a tick earlier, then silence
-	 * follows with nothing left to fade), so only the resume half can be ramped
-	 * consistently. WSOLA (Phase B) will smooth the pause edge; until then the pause
-	 * entry may carry a small click if the last sample sits far from a zero crossing
-	 * (a pre-existing Phase-4 property, not a Phase-A regression).</p>
-	 */
-	private static final int RESUME_RAMP_FRAMES = 2;
-	private static final long PROCESS_STOP_GRACE_MILLIS = 2000L;
-	private static final long STDERR_DRAIN_JOIN_MILLIS = 1000L;
-	private static final long DROPS_WARN_PER_STATS_INTERVAL = 250L;
+	static final int FRAME_BYTES = FRAME_SAMPLES * 2;
+	static final long FRAME_NANOS = 20_000_000L;
+	static final long FRAME_MILLIS = 20L;
+
+	static final long INITIAL_BACKOFF_SECONDS = 2L;
+
 	/**
 	 * Hysteresis high-water as a multiple of {@code targetFrames}. The live-edge
 	 * trim ENGAGES only once the buffer has genuinely crept to this multiple of
@@ -110,21 +61,17 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * latency creep to ~2x target ever costs a single skip (sow-005 Phase 1).
 	 */
 	private static final float HYSTERESIS_HIGH_MULTIPLIER = 2.0f;
-	/** Rolling drop-rate window (seconds) for the sow-005 micro-glitch metric. */
-	private static final int DROP_WINDOW_SECONDS = 60;
-	/** Buffer-occupancy ring depth: one sample/second over the last ~minute. */
-	private static final int OCCUPANCY_WINDOW_SAMPLES = 60;
 
-	private final String stationKey;
+	final String stationKey;
 	protected final String ffmpegBinary;
 	/** Hard cap on buffered frames (drop-oldest overflow bound). */
-	private final int maxBufferFrames;
+	final int maxBufferFrames;
 	/** Steady-state playout depth the live-edge trim walks the buffer back toward. */
-	private final int targetFrames;
+	final int targetFrames;
 	/** Fill required before (re)starting playout after a start or an underrun. */
-	private final int prerollFrames;
+	final int prerollFrames;
 	/** Hysteresis engage point: {@code round(HYSTERESIS_HIGH_MULTIPLIER * targetFrames)}. */
-	private final int highWaterFrames;
+	final int highWaterFrames;
 	/**
 	 * When true (default, sow-005 Phase 4, D-061) an ffmpeg respawn REUSES the retained
 	 * jitter buffer instead of flushing + re-prerolling from empty: playout keeps
@@ -135,7 +82,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * every respawn flushes the buffer - a NEW optional flush-and-re-preroll mode
 	 * (forcing a clean re-preroll per respawn), NOT a restoration of any prior behaviour.
 	 */
-	private final boolean reconnectPreserveBuffer;
+	final boolean reconnectPreserveBuffer;
 	/**
 	 * Buffered depth (frames) below which the sustained-drain re-anchor arms
 	 * (sow-005 Phase 4); forced strictly below BOTH {@code targetFrames} (so ordinary
@@ -143,38 +90,38 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * which rebuilds the cushion to {@code prerollFrames}, always lands above its own
 	 * arming threshold and fires once per drain episode, never once per sustain window).
 	 */
-	private final int reanchorLowWaterFrames;
+	final int reanchorLowWaterFrames;
 	/**
 	 * Consecutive below-low-water delivery ticks (20&nbsp;ms each) required before
 	 * ONE controlled re-anchor fires, or {@code 0} to disable the re-anchor entirely
 	 * (sow-005 Phase 4).
 	 */
-	private final int reanchorSustainFrames;
-	private final long maxBackoffSeconds;
+	final int reanchorSustainFrames;
+	final long maxBackoffSeconds;
 
 	// --- sow-005 Phase B: pitch-preserving time-stretch (TEMPO_MATCH) ---
 	/** Normalized smoothing mode ({@code "tempo_match"} or {@code "rebuffer"}). */
 	private final String smoothingMode;
 	/** Hard clamp on the stretch factor's magnitude ({@code factor in 1 +/- this}). */
-	private final double maxStretchFraction;
+	final double maxStretchFraction;
 	/**
 	 * Whether the WSOLA time-stretch stage is active: {@code "tempo_match"} mode with
 	 * a positive stretch budget. When false the delivery loop runs the exact Phase-A
 	 * passthrough (safe rollback, zero residual effect).
 	 */
-	private final boolean tempoMatchEnabled;
+	final boolean tempoMatchEnabled;
 	/**
 	 * The live stretch factor ({@code output/input}) the occupancy servo last set,
 	 * published for {@code /jockey diag}. {@code 1.0} means no stretch. Written once
 	 * per servo update by the delivery thread; read on any thread.
 	 */
-	private volatile double currentStretchFactor = 1.0;
+	volatile double currentStretchFactor = 1.0;
 	/**
 	 * Set true if the time-stretch stage ever throws at runtime: the delivery loop then
 	 * permanently falls back to the Phase-A passthrough so audio never breaks (logged
 	 * once). Diagnostics only; the authoritative flag is a delivery-thread local.
 	 */
-	private volatile boolean stretchRuntimeFailed;
+	volatile boolean stretchRuntimeFailed;
 	/**
 	 * Samples the WSOLA stage currently holds ahead of its analysis cursor - the DSP
 	 * ring depth that sits BEHIND the jitter buffer and adds a small fixed latency the
@@ -182,56 +129,16 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * TEMPO_MATCH for the {@code /jockey diag} ({@code dspRingMs}); stays 0 in
 	 * REBUFFER. Delivery-thread write, any-thread read (diagnostic only).
 	 */
-	private volatile int stretchRingSamples;
+	volatile int stretchRingSamples;
 
-	/** Frames per wall-second at 50 fps (20 ms frames); the servo error/gain scale. */
-	private static final double FRAMES_PER_SECOND = 1_000_000_000.0 / FRAME_NANOS;
-	/**
-	 * Occupancy-servo proportional gain (per second of buffer error). Sized with
-	 * {@link #STRETCH_KI} for a critically-ish damped loop (damping ratio ~0.7) whose
-	 * natural period is ~13&nbsp;min, so the factor adapts over minutes and never
-	 * fast-oscillates (the dev's explicit steer). Provides the damping term.
-	 */
-	private static final double STRETCH_KP = 0.010;
-	/**
-	 * Occupancy-servo integral gain (per second of buffer error, per ~1&nbsp;s update).
-	 * The integrator nulls the steady-state error so occupancy converges to the target
-	 * and the factor converges to exactly the source's inverse content-rate (~1.026 for
-	 * the SavePoint trunk) with no open-loop rate math. Deliberately tiny (minutes).
-	 */
-	private static final double STRETCH_KI = 0.00006;
-	/**
-	 * Initial servo integrator value (added to 1.0). Seeded near the SavePoint trunk's
-	 * known ~2.6% deficit so a cold start converges fast with minimal warm-up drain; the
-	 * servo self-corrects to any actual source rate (including a real-time RTMP push,
-	 * where it settles to ~1.0). Clamped into the stretch budget at runtime.
-	 */
-	private static final double STRETCH_INITIAL_INTEGRAL = 0.020;
-	/**
-	 * EMA smoothing coefficient for the occupancy error that feeds the PROPORTIONAL
-	 * term (~10&nbsp;s time constant at the 1&nbsp;Hz servo update). A bursty HLS fill or
-	 * post-reconnect catch-up can swing per-second occupancy by hundreds of frames; on
-	 * the raw error {@code STRETCH_KP} would then saturate the &plusmn;budget and step
-	 * the factor across its whole range at 1&nbsp;Hz - an audible tempo staircase. The
-	 * integral path stays on the RAW error, so steady-state convergence is unchanged.
-	 */
-	private static final double STRETCH_ERR_EMA_ALPHA = 0.10;
-	/**
-	 * Max change in the PUBLISHED stretch factor per servo update (~0.05%/s), so the
-	 * tempo only ever moves on the intended minutes timescale even through a large
-	 * occupancy transient. Each step is still a fresh WSOLA re-search, hence click-free;
-	 * this bounds the audible tempo-modulation RATE (wow/flutter), not click safety.
-	 */
-	private static final double STRETCH_MAX_SLEW = 0.0005;
-
-	private final List<AudioSink> sinks = new CopyOnWriteArrayList<>();
+	final List<AudioSink> sinks = new CopyOnWriteArrayList<>();
 
 	/** Ring buffer of decoded frames, guarded by {@code bufferLock}. */
-	private final ArrayDeque<short[]> buffer = new ArrayDeque<>();
-	private final Object bufferLock = new Object();
+	final ArrayDeque<short[]> buffer = new ArrayDeque<>();
+	final Object bufferLock = new Object();
 
 	/** Bounded tail of recent (sanitized) ffmpeg stderr lines, guarded by itself. */
-	private final ArrayDeque<String> stderrTail = new ArrayDeque<>();
+	final ArrayDeque<String> stderrTail = new ArrayDeque<>();
 
 	/**
 	 * Any URL embedded in free text (an ffmpeg stderr line, the diag arg-shape). Stops
@@ -251,98 +158,30 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * implementation runs a whole yt-dlp resolve), so calling it from a command handler
 	 * froze the server tick loop. Reporting what actually ran is also more accurate.
 	 */
-	private volatile String[] lastCommand;
+	volatile String[] lastCommand;
 
 	/**
 	 * {@code System.nanoTime()} of the most recent frame read from ffmpeg, or {@code 0}
-	 * when this connection has not produced one yet. Read by {@link #checkIngestStall()}
+	 * when this connection has not produced one yet. Read by {@link FeedDeliveryLoop#checkIngestStall()}
 	 * on the delivery thread; written by the ingest thread.
 	 */
-	private volatile long lastIngestFrameNanos;
+	volatile long lastIngestFrameNanos;
 
-	private final AtomicLong framesRead = new AtomicLong();
-	private final AtomicLong framesDelivered = new AtomicLong();
-	private final AtomicLong silenceFrames = new AtomicLong();
-	private final AtomicLong drops = new AtomicLong();
-	/**
-	 * Overflow-only drop total: frames shed by the hard-cap drop-oldest bound in
-	 * {@link #offerFrame} (an upstream flood re-sending seconds of audio), NOT the
-	 * hysteresis catch-up or the stall resync. The "feed drops high / raise
-	 * maxBufferSeconds" WARN gates on THIS delta so a bounded latency correction -
-	 * which the {@code maxBufferSeconds} knob does not address - never misfires
-	 * that remediation advice (sow-005 Phase 1).
-	 */
-	private final AtomicLong overflowDrops = new AtomicLong();
-	private final AtomicLong reconnects = new AtomicLong();
-	/**
-	 * ffmpeg respawns that REUSED the retained jitter buffer (sow-005 Phase 4,
-	 * D-061): the buffer still held at least the pre-roll cushion when the process
-	 * ended, so playout bridged the reconnect gap with no re-preroll blip. A subset
-	 * of {@code reconnects}; the remainder either flushed (knob off) or were already
-	 * below the cushion (cold start / long outage, re-prerolled naturally).
-	 */
-	private final AtomicLong bufferPreservedReconnects = new AtomicLong();
-	/**
-	 * Controlled sustained-drain re-anchors (sow-005 Phase 4): one per occurrence
-	 * that the buffer stayed below the low watermark long enough to trigger a single
-	 * clean playout pause rebuilding the target cushion, instead of a cluster of
-	 * ragged micro-underruns. Also counted as one glitch event each.
-	 */
-	private final AtomicLong reanchors = new AtomicLong();
-	/** Playing -> silence transitions (one per underrun, not per silence frame). */
-	private final AtomicLong underruns = new AtomicLong();
-	/**
-	 * Host/VM freeze events (see the delivery-loop detector): times the OS/hypervisor
-	 * suspended this process so the monotonic clock fell &gt;= {@link #HOST_FREEZE_THRESHOLD_MS}
-	 * behind the wall clock. An ENVIRONMENT metric (e.g. a WSL2 host freezing the guest),
-	 * not a mod fault; ~0 on healthy hardware. {@code hostFreezeMillis} totals the frozen time.
-	 */
-	private final AtomicLong hostFreezeEvents = new AtomicLong();
-	private final AtomicLong hostFreezeMillis = new AtomicLong();
-	/**
-	 * Audible-discontinuity EVENT total: one increment per occurrence - each
-	 * hysteresis catch-up, each stall resync, each underrun - regardless of how
-	 * many frames it shed. This is the sow-005 proof metric: a single bounded
-	 * catch-up sheds up to ~{@code targetFrames} frames but is ONE glitch, so
-	 * counting events (not frames) keeps steady state at a true 0 and stops one
-	 * rare correction from reading like the old ~120/min continuous nibble.
-	 */
-	private final AtomicLong glitchEvents = new AtomicLong();
-
-	/**
-	 * Rolling per-second window of dropped FRAMES (all causes) for sow-005 drop /
-	 * bandwidth accounting; {@code dropWindow.sum()} totals the last
-	 * {@link #DROP_WINDOW_SECONDS}.
-	 */
-	private final RollingWindow dropWindow = new RollingWindow(DROP_WINDOW_SECONDS);
-	/**
-	 * Rolling per-second window of glitch EVENTS (catch-up / resync / underrun
-	 * occurrences) for the sow-005 micro-glitch proof metric; reads a true 0 in
-	 * steady state and 1 per rare bounded correction (never the shed frame count).
-	 */
-	private final RollingWindow glitchEventWindow = new RollingWindow(DROP_WINDOW_SECONDS);
-
-	/**
-	 * Small ring of recent buffered-frame occupancy (one sample/second) for the
-	 * {@code /jockey diag} min/max/avg note. Guarded by {@link #occupancyLock}.
-	 */
-	private final int[] occupancySamples = new int[OCCUPANCY_WINDOW_SAMPLES];
-	private int occupancyCount;
-	private int occupancyHead;
-	private final Object occupancyLock = new Object();
+	/** Counters, rolling windows and the occupancy ring (see {@link FeedStats}). */
+	final FeedStats stats = new FeedStats();
 
 	/** nanoTime at {@link #start()}; the denominator for the effective PCM bitrate. */
 	private volatile long startNanos;
 
 	private final AtomicBoolean started = new AtomicBoolean();
 	private final AtomicBoolean stopped = new AtomicBoolean();
-	private volatile boolean running;
+	volatile boolean running;
 
 	/** Whether the feed is still live (not stopped). Lets a subclass abort an in-flight resolve. */
 	protected final boolean isRunning() {
 		return running;
 	}
-	private volatile Process process;
+	volatile Process process;
 	private volatile Future<?> ingestTask;
 	private volatile Future<?> deliveryTask;
 	/** Coarse connection state for diagnostics: connecting/streaming/idle/waiting. */
@@ -355,7 +194,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * this tracks the PLAYOUT side (are we past preroll and actually emitting audio).
 	 * {@link #playoutState()} combines the two into streaming/buffering/idle.
 	 */
-	private volatile boolean deliveryPlaying;
+	volatile boolean deliveryPlaying;
 	/**
 	 * The last finished connection's idle classification (sow-005 Phase A finding):
 	 * {@code true} once a connection ended classified idle (an HLS 404 off-air
@@ -368,14 +207,14 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 * cold start (no prior classification) and the re-anchor/preroll rebuffer still
 	 * report {@code "buffering"}.
 	 */
-	private volatile boolean lastClassifiedIdle;
+	volatile boolean lastClassifiedIdle;
 	/**
 	 * sow-012: set once when a FINITE source (repeat off) has streamed to its end and the ingest
 	 * loop stopped instead of respawning. The delivery loop drains the retained buffer then delivers
 	 * silence, and {@link #playoutState()} reports {@code "ended"} once playout stops - the signal the
 	 * jukebox mixin uses to let the disc finish (particles stop) like a vanilla disc.
 	 */
-	private volatile boolean inputEnded;
+	volatile boolean inputEnded;
 
 	/**
 	 * Per-connection stderr drain state: a fresh instance per spawned process
@@ -395,65 +234,6 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		/** Set by {@link #isRejectStderr}: this connection's audio must never be offered. */
 		final AtomicBoolean sawRejected = new AtomicBoolean();
 		final CountDownLatch done = new CountDownLatch(1);
-	}
-
-	/** What produced a batch of dropped frames, so diagnostics can separate causes. */
-	private enum DropCause {
-		/**
-		 * Hard-cap overflow in {@link #offerFrame} (an upstream flood re-sending
-		 * seconds of audio). This is the ONLY cause the {@code maxBufferSeconds}
-		 * knob bounds, so only this feeds the "raise maxBufferSeconds" WARN.
-		 */
-		OVERFLOW,
-		/**
-		 * A bounded latency correction - the hysteresis high-water catch-up or the
-		 * delivery-stall resync. One audible discontinuity per occurrence: it may
-		 * shed many frames but counts as a single glitch event. Raising
-		 * {@code maxBufferSeconds} does not reduce these (if anything it lets latency
-		 * creep further before the same correction), so they never feed that WARN.
-		 */
-		CATCH_UP
-	}
-
-	/**
-	 * A fixed-width rolling per-second counter: {@link #add} bumps the current
-	 * second's bucket, {@link #sum} totals the last {@code windowSeconds}. Each
-	 * bucket stamps the second it holds, so a bucket a full window old is ignored
-	 * on read without any sweeping. All access is synchronized on the instance, so
-	 * the ingest/delivery writer threads and the any-thread diag reader are safe.
-	 */
-	private static final class RollingWindow {
-		private final int windowSeconds;
-		private final long[] counts;
-		private final long[] seconds;
-
-		RollingWindow(int windowSeconds) {
-			this.windowSeconds = windowSeconds;
-			this.counts = new long[windowSeconds];
-			this.seconds = new long[windowSeconds];
-		}
-
-		synchronized void add(long count) {
-			long second = System.nanoTime() / 1_000_000_000L;
-			int idx = (int) Math.floorMod(second, (long) windowSeconds);
-			if (seconds[idx] != second) {
-				seconds[idx] = second;
-				counts[idx] = 0L;
-			}
-			counts[idx] += count;
-		}
-
-		synchronized long sum() {
-			long second = System.nanoTime() / 1_000_000_000L;
-			long cutoff = second - windowSeconds + 1;
-			long total = 0L;
-			for (int i = 0; i < windowSeconds; i++) {
-				if (seconds[i] >= cutoff && seconds[i] <= second) {
-					total += counts[i];
-				}
-			}
-			return total;
-		}
 	}
 
 	protected AbstractFfmpegFeed(String stationKey, String ffmpegBinary,
@@ -754,8 +534,8 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		startNanos = System.nanoTime();
 		JockeyRadioMod.LOGGER.info("[jockey] feed start station={} ingest=ffmpeg {}", stationKey, startLogDetail());
 		try {
-			ingestTask = executor.submit(this::runIngestLoop);
-			deliveryTask = executor.submit(this::runDeliveryLoop);
+			ingestTask = executor.submit(new FeedIngestLoop(this)::runIngestLoop);
+			deliveryTask = executor.submit(new FeedDeliveryLoop(this)::runDeliveryLoop);
 		} catch (RejectedExecutionException e) {
 			running = false;
 			JockeyRadioMod.LOGGER.warn("[jockey] feed start rejected station={} (executor shut down)", stationKey);
@@ -795,8 +575,8 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		sinks.clear();
 		JockeyRadioMod.LOGGER.info("[jockey] feed stop station={} ingest=ffmpeg frames={} delivered={} "
 						+ "silence={} drops={} reconnects={} underruns={}",
-				stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
-				drops.get(), reconnects.get(), underruns.get());
+				stationKey, stats.framesRead.get(), stats.framesDelivered.get(), stats.silenceFrames.get(),
+				stats.drops.get(), stats.reconnects.get(), stats.underruns.get());
 	}
 
 	@Override
@@ -811,7 +591,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 
 	@Override
 	public final long framesRead() {
-		return framesRead.get();
+		return stats.framesRead.get();
 	}
 
 	@Override
@@ -822,12 +602,12 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		}
 		return "station=" + stationKey
 				+ " ingest=ffmpeg state=" + connectionState
-				+ " frames=" + framesRead.get()
-				+ " delivered=" + framesDelivered.get()
-				+ " silence=" + silenceFrames.get()
-				+ " drops=" + drops.get()
-				+ " reconnects=" + reconnects.get()
-				+ " underruns=" + underruns.get()
+				+ " frames=" + stats.framesRead.get()
+				+ " delivered=" + stats.framesDelivered.get()
+				+ " silence=" + stats.silenceFrames.get()
+				+ " drops=" + stats.drops.get()
+				+ " reconnects=" + stats.reconnects.get()
+				+ " underruns=" + stats.underruns.get()
 				+ " buffered=" + buffered
 				+ " latencyMs=" + (buffered * FRAME_MILLIS)
 				+ " targetMs=" + (targetFrames * FRAME_MILLIS)
@@ -906,17 +686,17 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		return getStatsLine()
 				+ " playout=" + playoutState()
 				+ (extra.isEmpty() ? "" : " " + extra)
-				+ " dropsLast" + DROP_WINDOW_SECONDS + "s=" + dropWindow.sum()
-				+ " glitchEvents=" + glitchEvents.get()
-				+ " glitchEventsLast" + DROP_WINDOW_SECONDS + "s=" + glitchEventWindow.sum()
+				+ " dropsLast" + FeedStats.DROP_WINDOW_SECONDS + "s=" + stats.dropWindow.sum()
+				+ " glitchEvents=" + stats.glitchEvents.get()
+				+ " glitchEventsLast" + FeedStats.DROP_WINDOW_SECONDS + "s=" + stats.glitchEventWindow.sum()
 				+ " pcmKbps=" + effectiveKbps()
 				// sow-005 Phase 4: effective target depth (also targetMs above), the
 				// buffer-preserving-reconnect count and the sustained-drain re-anchor
 				// count + its low-water threshold, so an operator can see both smoothing
 				// paths firing. All plain counter/field reads - allocation-light.
 				+ " targetFrames=" + targetFrames
-				+ " bufferPreservedReconnects=" + bufferPreservedReconnects.get()
-				+ " reanchors=" + reanchors.get()
+				+ " bufferPreservedReconnects=" + stats.bufferPreservedReconnects.get()
+				+ " reanchors=" + stats.reanchors.get()
 				+ " reanchorLowWaterMs=" + (reanchorLowWaterFrames * FRAME_MILLIS)
 				// sow-005 Phase B: smoothing mode + live time-stretch. In TEMPO_MATCH the
 				// stretch factor (output/input) the occupancy servo settled on, the implied
@@ -933,7 +713,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 								+ " dspRingMs=" + (stretchRingSamples / 48)
 								+ (stretchRuntimeFailed ? " stretchFallback=passthrough" : "")
 						: "")
-				+ " " + occupancySummary()
+				+ " " + stats.occupancySummary()
 				+ " args=[" + redactedCommand() + "]";
 	}
 
@@ -945,79 +725,6 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	/** Rounds to 2 decimal places for the diag stretch-budget note. */
 	private static double round2(double v) {
 		return Math.round(v * 100.0) / 100.0;
-	}
-
-	/**
-	 * Records {@code count} dropped frames from {@code cause}: always bumps the
-	 * grand {@code drops} total and the all-causes {@code dropWindow} (frame-level
-	 * drop/bandwidth accounting). An {@link DropCause#OVERFLOW} batch additionally
-	 * feeds the overflow-only counter the "raise maxBufferSeconds" WARN gates on; a
-	 * {@link DropCause#CATCH_UP} batch instead records ONE glitch event (via
-	 * {@link #recordGlitchEvent()}) no matter how many frames it shed, so a single
-	 * bounded correction never reads as many micro-glitches. No-op for a
-	 * non-positive count; must never be called while holding {@link #bufferLock}
-	 * (it takes only the small window monitors, and nothing under those takes
-	 * {@code bufferLock}).
-	 */
-	private void recordDrops(long count, DropCause cause) {
-		if (count <= 0) {
-			return;
-		}
-		drops.addAndGet(count);
-		dropWindow.add(count);
-		if (cause == DropCause.OVERFLOW) {
-			overflowDrops.addAndGet(count);
-		} else {
-			recordGlitchEvent();
-		}
-	}
-
-	/**
-	 * Records ONE audible-discontinuity event - a hysteresis catch-up, a stall
-	 * resync, or an underrun: bumps the {@code glitchEvents} total and the rolling
-	 * {@code glitchEventWindow}. Per occurrence, never per shed frame - this is the
-	 * sow-005 proof metric that reads a true 0 in steady state. Takes only the
-	 * window monitor, so it is safe to call outside (never inside) {@code bufferLock}.
-	 */
-	private void recordGlitchEvent() {
-		glitchEvents.incrementAndGet();
-		glitchEventWindow.add(1L);
-	}
-
-	/** Appends one buffered-occupancy sample to the diag ring. */
-	private void recordOccupancy(int buffered) {
-		synchronized (occupancyLock) {
-			occupancySamples[occupancyHead] = buffered;
-			occupancyHead = (occupancyHead + 1) % OCCUPANCY_WINDOW_SAMPLES;
-			if (occupancyCount < OCCUPANCY_WINDOW_SAMPLES) {
-				occupancyCount++;
-			}
-		}
-	}
-
-	/** {@code occBuffered(min/max/avg)} over the occupancy ring, or dashes when empty. */
-	private String occupancySummary() {
-		int min = Integer.MAX_VALUE;
-		int max = 0;
-		long sum = 0L;
-		int n;
-		synchronized (occupancyLock) {
-			n = occupancyCount;
-			for (int i = 0; i < n; i++) {
-				int v = occupancySamples[i];
-				if (v < min) {
-					min = v;
-				}
-				if (v > max) {
-					max = v;
-				}
-				sum += v;
-			}
-		}
-		if (n == 0) {
-			return "occBuffered(min/max/avg)=-/-/-";
-		}
-		return "occBuffered(min/max/avg)=" + min + "/" + max + "/" + (sum / n);
 	}
 
 	/**
@@ -1035,7 +742,7 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		if (elapsedNanos <= 0L) {
 			return 0L;
 		}
-		double bits = framesDelivered.get() * (double) FRAME_BYTES * 8.0;
+		double bits = stats.framesDelivered.get() * (double) FRAME_BYTES * 8.0;
 		double seconds = elapsedNanos / 1_000_000_000.0;
 		return Math.round(bits / seconds / 1000.0);
 	}
@@ -1053,921 +760,5 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	private String redactedCommand() {
 		String[] cmd = lastCommand;
 		return cmd == null ? "(not spawned yet)" : sanitize(String.join(" ", cmd));
-	}
-
-	// ------------------------------------------------------------------
-	// Ingest loop (feed executor thread)
-	// ------------------------------------------------------------------
-
-	private void runIngestLoop() {
-		long backoffSeconds = INITIAL_BACKOFF_SECONDS;
-		long attempt = 0;
-		while (running && !Thread.currentThread().isInterrupted()) {
-			connectionState = "connecting";
-			// Per-connection reset, so a value left by the PREVIOUS connection cannot make
-			// the stall watchdog fire against a listener that has not streamed yet.
-			lastIngestFrameNanos = 0L;
-			long firstFrameNanos = -1L;
-			long lastFrameNanos = -1L;
-			String reason;
-			Process p = null;
-			StderrDrain drain = null;
-			try {
-				p = spawnProcess();
-				process = p;
-				drain = startStderrDrainer(p);
-				afterSpawn();
-				long[] frameTimes = readFrames(p, drain);
-				firstFrameNanos = frameTimes[0];
-				lastFrameNanos = frameTimes[1];
-				reason = classifyEnd(p);
-			} catch (IOException e) {
-				recordStderr("spawn failed: " + e.getMessage());
-				reason = "exit";
-			} finally {
-				process = null;
-				if (p != null) {
-					destroyProcess(p);
-				}
-			}
-			if (!running || Thread.currentThread().isInterrupted()) {
-				break;
-			}
-
-			awaitStderrDrain(drain);
-
-			// sow-012: a finite source (repeat off) that STREAMED to its end plays once and stops
-			// instead of respawning/looping. Gated on firstFrameNanos >= 0 so a resolve/startup
-			// failure (never streamed) still retries below rather than parking a never-played disc.
-			// The delivery loop drains the retained buffer then goes silent; playoutState() -> "ended".
-			if (stopAtEndOfInput() && firstFrameNanos >= 0) {
-				inputEnded = true;
-				connectionState = "ended";
-				JockeyRadioMod.LOGGER.info("[jockey] feed end-of-input station={} (repeat off); playing once, stopping",
-						stationKey);
-				break;
-			}
-
-			reconnects.incrementAndGet();
-			// sow-005 Phase 4 (D-061): decide the retained jitter buffer's fate for
-			// this respawn - reuse it (default, no re-preroll blip) or flush it for a
-			// clean re-preroll (legacy knob-off path). Delivery is untouched otherwise.
-			handleReconnectBuffer();
-			boolean healthyStreak = firstFrameNanos >= 0
-					&& lastFrameNanos - firstFrameNanos >= HEALTHY_STREAK_NANOS;
-			if (healthyStreak) {
-				backoffSeconds = INITIAL_BACKOFF_SECONDS;
-				attempt = 0;
-			}
-			attempt++;
-
-			boolean idle = p != null && classifyIdle(drain);
-			// Remember this connection's classification so playoutState() can keep a
-			// repeatedly-404 off-air station reading "idle" through the next "connecting"
-			// probe instead of flashing "buffering" each ladder cycle (sow-005 Phase A
-			// finding). A connection that streamed or failed hard clears it.
-			lastClassifiedIdle = idle;
-			if (idle) {
-				// A prompt-respawn feed (RTMP RECEIVE) pins idle respawns to the
-				// short initial delay so a flapping publisher is never locked out
-				// of the listen port; HLS keeps its escalating 404-idle backoff.
-				if (promptRespawnOnIdle()) {
-					backoffSeconds = INITIAL_BACKOFF_SECONDS;
-					attempt = 0;
-				}
-				onIdle(backoffSeconds);
-			} else {
-				connectionState = "waiting";
-				JockeyRadioMod.LOGGER.warn("[jockey] feed reconnect station={} attempt={} reason={} lastStderr={}",
-						stationKey, attempt, reason, lastStderrLine());
-			}
-
-			try {
-				Thread.sleep(Math.max(0L, reconnectDelayMillis(backoffSeconds, idle, attempt)));
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				break;
-			}
-			backoffSeconds = Math.min(backoffSeconds * 2, maxBackoffSeconds);
-		}
-	}
-
-	private Process spawnProcess() throws IOException {
-		String[] cmd = buildCommand();
-		// Snapshot for the diag arg-shape, so getDiagLine() never has to rebuild (and
-		// possibly re-resolve) the command on a caller's thread.
-		lastCommand = cmd;
-		return new ProcessBuilder(List.of(cmd)).start();
-	}
-
-	/**
-	 * Reads full 1920-byte frames from ffmpeg stdout into the ring buffer until
-	 * EOF, error, stop or rejection. Returns {@code [firstFrameNanos, lastFrameNanos]}
-	 * ({@code -1} when no frame was admitted).
-	 */
-	private long[] readFrames(Process p, StderrDrain drain) {
-		byte[] raw = new byte[FRAME_BYTES];
-		long firstFrameNanos = -1L;
-		long lastFrameNanos = -1L;
-		InputStream in = p.getInputStream();
-		try {
-			while (running && !Thread.currentThread().isInterrupted()) {
-				int n = in.readNBytes(raw, 0, FRAME_BYTES);
-				if (n < FRAME_BYTES) {
-					break; // EOF (any partial trailing frame is discarded)
-				}
-				if (firstFrameNanos < 0 && !holdForAdmission()) {
-					break;
-				}
-				if (drain.sawRejected.get()) {
-					break; // refused by the stderr drainer; none of its audio is offered
-				}
-				short[] frame = new short[FRAME_SAMPLES];
-				ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(frame);
-				lastFrameNanos = System.nanoTime();
-				// Published for the stall watchdog, which cannot see this method's local.
-				lastIngestFrameNanos = lastFrameNanos;
-				if (firstFrameNanos < 0) {
-					firstFrameNanos = lastFrameNanos;
-					connectionState = "streaming";
-				}
-				framesRead.incrementAndGet();
-				offerFrame(frame);
-			}
-		} catch (IOException e) {
-			if (running) {
-				recordStderr("stdout read failed: " + e.getMessage());
-			}
-		}
-		return new long[] {firstFrameNanos, lastFrameNanos};
-	}
-
-	/** Waits {@link #admissionDelayMillis()}; false when interrupted (stop). */
-	private boolean holdForAdmission() {
-		long delay = admissionDelayMillis();
-		if (delay <= 0L) {
-			return true;
-		}
-		try {
-			Thread.sleep(delay);
-			return true;
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			return false;
-		}
-	}
-
-	/** After stdout ended: {@code exit} if the process is (about to be) dead, else {@code eof}. */
-	private static String classifyEnd(Process p) {
-		try {
-			if (p.waitFor(1, TimeUnit.SECONDS)) {
-				return "exit";
-			}
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-		return "eof";
-	}
-
-	/**
-	 * Enqueue one frame, dropping the OLDEST on overflow at the hard
-	 * {@code maxBufferFrames} cap. This bound only fires on a genuine flood (an
-	 * upstream reconnect re-sending seconds of audio); steady-state latency is
-	 * walked back to target by the delivery loop's gentle trim, not here.
-	 */
-	private void offerFrame(short[] frame) {
-		long dropped = 0L;
-		synchronized (bufferLock) {
-			while (buffer.size() >= maxBufferFrames) {
-				buffer.pollFirst();
-				dropped++;
-			}
-			buffer.addLast(frame);
-		}
-		recordDrops(dropped, DropCause.OVERFLOW);
-	}
-
-	/**
-	 * Buffer-preserving reconnect (sow-005 Phase 4, the dev's D-061 win). Runs on
-	 * the ingest thread between a process ending and the next spawn.
-	 *
-	 * <p>With {@link #reconnectPreserveBuffer} on (default) the retained buffer is
-	 * left INTACT: playout keeps draining the frames it already holds while the new
-	 * ffmpeg process refills them, so a reconnect gap shorter than the buffered depth
-	 * (e.g. SavePoint's ~2&nbsp;s RTMP publisher restart) is bridged with no flush and
-	 * no re-preroll blip. Only when the buffer still holds at least the pre-roll
-	 * cushion is this counted a {@code bufferPreservedReconnects}; below the cushion
-	 * (cold start or a long outage) nothing is done here - the delivery loop
-	 * re-prerolls naturally on its next underrun, exactly as before.</p>
-	 *
-	 * <p>The preserve default reproduces the pre-Phase-4 behaviour, where a respawn never
-	 * cleared the buffer (the only flush was in {@link #stop()}). With the knob off the
-	 * buffer is instead flushed under {@code bufferLock} so playout re-prerolls cleanly
-	 * from empty on every respawn - a NEW opt-in flush-and-re-preroll mode, not a
-	 * restoration of prior behaviour. Either way this only touches the buffer under its
-	 * lock and never blocks - the delivery and server threads are unaffected.</p>
-	 */
-	private void handleReconnectBuffer() {
-		if (reconnectPreserveBuffer) {
-			int buffered;
-			synchronized (bufferLock) {
-				buffered = buffer.size();
-			}
-			if (buffered >= prerollFrames) {
-				bufferPreservedReconnects.incrementAndGet();
-			}
-			// else: below the cushion - leave the buffer intact and let the delivery
-			// loop re-preroll on its next underrun (cold start / long outage).
-			return;
-		}
-		// Opt-in flush mode (knob off): clear so playout re-prerolls from empty on every
-		// respawn. This is NEW behaviour - the pre-Phase-4 code never flushed on respawn.
-		synchronized (bufferLock) {
-			buffer.clear();
-		}
-	}
-
-	// ------------------------------------------------------------------
-	// Stderr drainer (feed executor thread, one per process)
-	// ------------------------------------------------------------------
-
-	private StderrDrain startStderrDrainer(Process p) {
-		StderrDrain drain = new StderrDrain();
-		Runnable drainer = () -> {
-			try {
-				drainStderr(p, drain);
-			} finally {
-				drain.done.countDown();
-			}
-		};
-		ExecutorService executor = FeedRegistry.get().feedExecutor();
-		if (executor != null) {
-			try {
-				executor.submit(drainer);
-				return drain;
-			} catch (RejectedExecutionException ignored) {
-				// fall through to the plain daemon thread
-			}
-		}
-		// Registry already shutting down - stderr must STILL be drained or the
-		// pipe fills and ffmpeg wedges until our destroy. Cheap daemon thread.
-		Thread thread = new Thread(drainer, "jockey-radio-stderr-" + stationKey);
-		thread.setDaemon(true);
-		thread.start();
-		return drain;
-	}
-
-	private void drainStderr(Process p, StderrDrain drain) {
-		try (BufferedReader reader = new BufferedReader(
-				new InputStreamReader(p.getErrorStream(), StandardCharsets.UTF_8))) {
-			String line;
-			while ((line = reader.readLine()) != null) {
-				if (line.isBlank()) {
-					continue;
-				}
-				if (isIdleStderr(line)) {
-					drain.sawIdle.set(true);
-				}
-				if (isFatalStderr(line)) {
-					drain.sawFatal.set(true);
-				}
-				if (isRejectStderr(line) && drain.sawRejected.compareAndSet(false, true)) {
-					JockeyRadioMod.LOGGER.warn("[jockey] feed rejected a connection station={}: {}",
-							stationKey, sanitize(line));
-					// Non-blocking: the ingest thread's finally still runs the graceful destroy.
-					p.destroyForcibly();
-				}
-				recordStderr(line);
-			}
-		} catch (IOException ignored) {
-			// Process destroyed under us - expected on stop/reconnect.
-		}
-	}
-
-	/** Bounded join on the connection's stderr drainer; safe to call with null. */
-	private static void awaitStderrDrain(StderrDrain drain) {
-		if (drain == null) {
-			return;
-		}
-		try {
-			drain.done.await(STDERR_DRAIN_JOIN_MILLIS, TimeUnit.MILLISECONDS);
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-	}
-
-	private void recordStderr(String line) {
-		line = sanitize(line);
-		synchronized (stderrTail) {
-			while (stderrTail.size() >= STDERR_TAIL_LINES) {
-				stderrTail.pollFirst();
-			}
-			stderrTail.addLast(line);
-		}
-	}
-
-	// ------------------------------------------------------------------
-	// Delivery loop (feed executor thread)
-	// ------------------------------------------------------------------
-
-	/**
-	 * Target-latency jitter buffer playout. Pre-rolls silence until the buffer
-	 * holds {@code prerollFrames}, then drains one frame per 20&nbsp;ms; an empty
-	 * buffer is an underrun that delivers silence and re-rolls. While playing, a
-	 * wide-deadband HYSTERESIS trim (sow-005 Phase 1) leaves the buffer untouched
-	 * anywhere below high-water (~2x target) - so steady-state jitter drops zero
-	 * frames and produces no micro-glitches - and only once latency genuinely
-	 * creeps to high-water drains the excess back to {@code targetFrames} in one
-	 * bounded whole-frame catch-up before disengaging until the next creep. The
-	 * nanoTime drift/stall resync from sow-001 is preserved for delivery-thread
-	 * lateness and still respects {@code targetFrames}.
-	 */
-	private void runDeliveryLoop() {
-		// Shared zero frame; sinks must not mutate delivered frames.
-		short[] silence = new short[FRAME_SAMPLES];
-		long next = System.nanoTime();
-		long lastStats = next;
-		long lastOccupancy = next;
-		// Wall-clock baseline paired with lastOccupancy for the host/VM freeze detector.
-		long lastOccWallMs = System.currentTimeMillis();
-		// The "feed drops high" WARN watches ONLY overflow drops (see below), so its
-		// 30 s baseline is the overflow counter, not the all-causes drops total.
-		long lastStatsOverflowDrops = overflowDrops.get();
-		// Per-interval CSV diagnostics baselines (delivery thread only; FeedDiagnostics
-		// off => never read). Seeded to the current counters so the first emitted row
-		// shows a one-interval delta, not a since-start burst.
-		long lastDiag = next;
-		long diagFramesRead = framesRead.get();
-		long diagDelivered = framesDelivered.get();
-		long diagSilence = silenceFrames.get();
-		long diagDrops = drops.get();
-		long diagOverflow = overflowDrops.get();
-		long diagUnderruns = underruns.get();
-		long diagReanchors = reanchors.get();
-		long diagReconnects = reconnects.get();
-		// Playout state machine: starts pre-rolling (not yet playing). The
-		// hysteresis trim needs no persistent latch - it engages, drains to target
-		// and disengages within a single tick, so the deadband is simply "drop
-		// nothing until the buffer climbs back to high-water again".
-		boolean playing = false;
-		deliveryPlaying = false;
-		// Frames of resume gain-ramp still to apply (sow-005 Phase A, item 4). Armed to
-		// RESUME_RAMP_FRAMES on every playing false->true transition (cold start, post
-		// underrun, post re-anchor); counts down as each ramped frame is delivered, so
-		// the ramp fires ONLY on a resume and never in steady state.
-		int rampFramesLeft = 0;
-		// Consecutive PLAYING ticks the buffer has sat below the re-anchor low water
-		// (sow-005 Phase 4). Reset whenever occupancy recovers, on an underrun, and
-		// after a re-anchor fires, so only a SUSTAINED drain trips the re-anchor.
-		long belowLowTicks = 0L;
-		// sow-005 Phase B: pitch-preserving time-stretch (TEMPO_MATCH) delivery-thread
-		// state. The stretcher is delivery-thread-private (no locks; mirrors
-		// applyResumeRamp) and only exists in TEMPO_MATCH mode; in REBUFFER it stays null
-		// and the loop runs the exact Phase-A passthrough. stretchFailed latches a runtime
-		// DSP exception into a permanent passthrough fallback so audio never breaks.
-		WsolaTimeStretcher stretcher = tempoMatchEnabled ? new WsolaTimeStretcher() : null;
-		boolean stretchFailed = false;
-		// Reused staging for frames polled under bufferLock and appended to the stretcher
-		// off-lock (references only cross the lock; the DSP ring copy runs off-lock).
-		short[][] pollStage = new short[16][];
-		// Occupancy-servo state. servoIntegral is the slow error-nulling term (seeded near
-		// the trunk's ~2.6% deficit); stretchFactor is the clamped output/input factor the
-		// stretcher applies. Published to currentStretchFactor for diag.
-		double servoIntegral = clampStretch(STRETCH_INITIAL_INTEGRAL);
-		double stretchFactor = clampFactor(1.0 + servoIntegral);
-		// EMA-smoothed occupancy error feeding the proportional term (finding: keeps a
-		// bursty fill/reconnect swing from stepping the factor across its clamp at 1 Hz).
-		double occErrEma = 0.0;
-		currentStretchFactor = tempoMatchEnabled ? stretchFactor : 1.0;
-		while (running && !Thread.currentThread().isInterrupted()) {
-			short[] frame = silence;
-			long trimmed = 0L;
-			// >= 0 only on the tick a controlled re-anchor fired: the buffered depth to
-			// log/record for it, outside bufferLock.
-			long reanchorBuffered = -1L;
-
-			if (!playing) {
-				// PRE-ROLL: hold at silence, draining nothing, until the buffer has
-				// filled to prerollFrames; then start playout on the first real frame
-				// and reset the pace clock so there is no catch-up burst.
-				synchronized (bufferLock) {
-					// Normally hold until prerollFrames are buffered. sow-012: but once the input has
-					// ENDED (a finite repeat-off source shorter than the preroll cushion), play whatever
-					// it managed to buffer rather than waiting for a preroll that will never arrive - else
-					// a sub-preroll file/VOD would drain to "ended" having played only silence.
-					if (buffer.size() >= prerollFrames || (inputEnded && !buffer.isEmpty())) {
-						frame = buffer.pollFirst();
-					} else {
-						frame = null;
-					}
-				}
-				if (frame != null) {
-					playing = true;
-					// Arm the click-free resume ramp: this is the single playing
-					// false->true transition (cold start / post-underrun / post
-					// re-anchor all route through here), so ramping the first
-					// RESUME_RAMP_FRAMES from 0 to full gain covers every audible
-					// resume and only those.
-					rampFramesLeft = RESUME_RAMP_FRAMES;
-					next = System.nanoTime();
-					framesDelivered.incrementAndGet();
-					// sow-005 Phase B: discard any stale samples the stretcher's private ring
-					// held from before this preroll (a prior underrun/re-anchor left up to
-					// ~45 ms of pre-outage audio behind its cursor). Resetting here makes the
-					// stretch stream resume cleanly from the freshly-prerolled frames (its
-					// first output re-does the Hann fade-in, reinforcing the click-free
-					// resume ramp) instead of splicing stale audio before the new content.
-					// Harmless on a cold start (the ring is already empty).
-					if (stretcher != null) {
-						stretcher.reset();
-					}
-				} else {
-					frame = silence;
-					silenceFrames.incrementAndGet();
-				}
-			} else {
-				// PLAYING. sow-005 Phase B: in TEMPO_MATCH the WSOLA stage consumes the
-				// jitter buffer and emits ONE pitch-preserving time-stretched frame per
-				// tick, holding occupancy constant against the source deficit; a runtime
-				// DSP exception latches a permanent passthrough fallback so audio never
-				// breaks. In REBUFFER (stretcher == null) the exact Phase-A passthrough
-				// below runs unchanged.
-				boolean handled = false;
-				if (stretcher != null && !stretchFailed) {
-					try {
-						// Poll enough input under bufferLock (references only cross the
-						// lock), apply the SAME high-water trim, capture occupancy - then
-						// append + synthesize entirely OFF the lock on delivery-thread
-						// locals, mirroring the applyResumeRamp discipline.
-						int needFrames = stretcher.framesNeededFor();
-						if (needFrames > pollStage.length) {
-							needFrames = pollStage.length;
-						}
-						int polledCount = 0;
-						int postPollSize;
-						synchronized (bufferLock) {
-							int available = buffer.size();
-							while (polledCount < needFrames) {
-								short[] f = buffer.pollFirst();
-								if (f == null) {
-									break;
-								}
-								pollStage[polledCount++] = f;
-							}
-							// High-water hysteresis trim, unchanged: once the buffer has
-							// crept to high-water, drain the excess oldest frames back to
-							// target in one bounded catch-up (still caps latency on bursts).
-							if (available >= highWaterFrames) {
-								int excess = buffer.size() - targetFrames;
-								for (int i = 0; i < excess; i++) {
-									buffer.pollFirst();
-								}
-								if (excess > 0) {
-									trimmed = excess;
-								}
-							}
-							postPollSize = buffer.size();
-						}
-						// OFF-lock DSP: feed the private ring, then synthesize one stretched
-						// frame - or, if the ring is starved (a TRUE drain despite max
-						// stretch: source gone), take the identical underrun/re-anchor path
-						// so the Phase-4 backstop still fires.
-						for (int i = 0; i < polledCount; i++) {
-							stretcher.append(pollStage[i]);
-							pollStage[i] = null;
-						}
-						if (stretcher.canProduce()) {
-							frame = stretcher.produceFrame(stretchFactor);
-							// Publish the DSP ring depth for the diag (the fixed latency the
-							// jitter-buffer latencyMs excludes); volatile, once per tick.
-							stretchRingSamples = stretcher.bufferedSamplesAhead();
-							framesDelivered.incrementAndGet();
-							// SUSTAINED-DRAIN RE-ANCHOR (sow-005 Phase 4) keyed off jitter
-							// buffer occupancy exactly as the passthrough path: with the
-							// stretch holding content-rate this should almost never fire in
-							// steady state, remaining as the hard-reset backstop for a real
-							// outage.
-							if (reanchorSustainFrames > 0) {
-								if (postPollSize < reanchorLowWaterFrames) {
-									if (++belowLowTicks >= reanchorSustainFrames) {
-										playing = false;
-										belowLowTicks = 0L;
-										reanchorBuffered = postPollSize;
-									}
-								} else {
-									belowLowTicks = 0L;
-								}
-							}
-						} else {
-							frame = silence;
-							silenceFrames.incrementAndGet();
-							playing = false;
-							underruns.incrementAndGet();
-							recordGlitchEvent();
-							belowLowTicks = 0L;
-						}
-						handled = true;
-					} catch (Throwable t) {
-						// Never break audio: latch a permanent passthrough fallback for this
-						// feed and let the Phase-A path below handle THIS tick too. Recover
-						// cleanly at the fallback edge instead of dropping buffered audio and
-						// undercounting the trim:
-						//  (1) re-enqueue any polled-but-not-yet-appended frames to the FRONT
-						//      of the jitter buffer (reverse index order preserves FIFO) so no
-						//      buffered content is lost - frames already fed into the stretcher
-						//      ring were nulled at append and cannot be recovered (bounded to
-						//      the small ring);
-						//  (2) account the high-water excess we already physically removed
-						//      under lock this tick as a CATCH_UP drop (recorded here, off
-						//      lock) rather than discarding it, then clear the shared
-						//      accumulator so the passthrough retry below counts only its OWN
-						//      trim (no double attribution).
-						stretchFailed = true;
-						stretchRuntimeFailed = true;
-						long stretchTrim = trimmed;
-						trimmed = 0L;
-						synchronized (bufferLock) {
-							for (int i = pollStage.length - 1; i >= 0; i--) {
-								if (pollStage[i] != null) {
-									buffer.addFirst(pollStage[i]);
-									pollStage[i] = null;
-								}
-							}
-						}
-						recordDrops(stretchTrim, DropCause.CATCH_UP);
-						JockeyRadioMod.LOGGER.error(
-								"[jockey] time-stretch failed station={}; falling back to passthrough for this feed",
-								stationKey, t);
-					}
-				}
-				if (!handled) {
-				// PLAYING: drain one frame; when empty, underrun -> silence + re-roll.
-				// HYSTERESIS TRIM (sow-005 Phase 1): only once the buffer has genuinely
-				// crept to high-water (~2x target) do we drain the excess oldest frames
-				// straight back to target in ONE bounded catch-up (whole frames only,
-				// never a resample) - a single rare skip instead of the old continuous
-				// one-frame-per-500ms nibble that cost ~120 micro-glitches/min. Anywhere
-				// below high-water nothing is dropped, so steady-state jitter costs zero
-				// glitches, and the catch-up cannot recur until the buffer climbs back to
-				// high-water (the wide deadband). The single skip is bounded by the buffer
-				// depth (maxBufferFrames - targetFrames) and only fires on a real creep.
-				int postPollSize;
-				synchronized (bufferLock) {
-					int available = buffer.size();
-					frame = buffer.pollFirst();
-					if (frame != null && available >= highWaterFrames) {
-						int excess = buffer.size() - targetFrames;
-						for (int i = 0; i < excess; i++) {
-							buffer.pollFirst();
-						}
-						if (excess > 0) {
-							trimmed = excess;
-						}
-					}
-					postPollSize = buffer.size();
-				}
-				if (frame != null) {
-					framesDelivered.incrementAndGet();
-					// SUSTAINED-DRAIN RE-ANCHOR (sow-005 Phase 4): the trunk produces at
-					// ~98% of realtime, so at a fixed 50 fps our buffer slowly drains
-					// toward empty - a creep the high-water trim can never counter (it only
-					// fires when the buffer is HIGH). Once occupancy has sat below the low
-					// watermark for reanchorSustainFrames consecutive ticks (a sustained
-					// drain, not a one-off dip), perform ONE controlled re-anchor: drop
-					// back to the pre-roll hold so playout pauses a single time and rebuilds
-					// the full target cushion, instead of a cluster of ragged micro-underruns
-					// as the buffer bounces off empty. One clean bounded discontinuity, not a
-					// continuous clock warp (the explicit dev steer). Disabled when
-					// reanchorSustainFrames == 0.
-					if (reanchorSustainFrames > 0) {
-						if (postPollSize < reanchorLowWaterFrames) {
-							if (++belowLowTicks >= reanchorSustainFrames) {
-								playing = false;
-								belowLowTicks = 0L;
-								reanchorBuffered = postPollSize;
-							}
-						} else {
-							belowLowTicks = 0L;
-						}
-					}
-				} else {
-					frame = silence;
-					silenceFrames.incrementAndGet();
-					playing = false;
-					underruns.incrementAndGet();
-					// An underrun (playout ran dry -> silence + re-roll) is an audible
-					// discontinuity too; record it as one glitch event.
-					recordGlitchEvent();
-					// The underrun already forces a re-preroll; clear the drain streak so
-					// a true underrun and the proactive re-anchor never fight or double up.
-					belowLowTicks = 0L;
-				}
-				} // end if (!handled) - Phase-A passthrough
-			}
-
-			// Count the hysteresis catch-up drops outside bufferLock (recordDrops
-			// takes only the window monitors and must never nest under bufferLock).
-			// One catch-up is ONE glitch event, however many frames it sheds.
-			if (trimmed > 0) {
-				recordDrops(trimmed, DropCause.CATCH_UP);
-			}
-			// Record a controlled re-anchor outside bufferLock (recordGlitchEvent takes
-			// only the window monitor): it is ONE deliberate bounded discontinuity - the
-			// pre-roll pause that rebuilds the cushion - counted distinctly from an
-			// underrun and logged as its own line, no frames dropped (the retained frames
-			// stay and playout resumes from them once refilled to prerollFrames).
-			if (reanchorBuffered >= 0L) {
-				reanchors.incrementAndGet();
-				recordGlitchEvent();
-				JockeyRadioMod.LOGGER.info(
-						"[jockey] feed reanchor station={} buffered={} lowWaterFrames={} sustainFrames={}; "
-								+ "sustained drain; re-prerolling to rebuild target cushion",
-						stationKey, reanchorBuffered, reanchorLowWaterFrames, reanchorSustainFrames);
-			}
-
-			// CLICK-FREE RESUME RAMP (sow-005 Phase A, item 4): on the first
-			// RESUME_RAMP_FRAMES after a resume, deliver a fresh COPY of the frame
-			// scaled by a linear 0->full-gain envelope so the resume has no click.
-			// Only on a real resume frame (playing, not the shared silence frame),
-			// so steady state neither ramps nor allocates. The dequeued frame is
-			// never mutated in place - a sink may retain it - so we scale into a new
-			// array. Runs on the delivery thread, outside bufferLock.
-			if (playing && rampFramesLeft > 0 && frame != silence) {
-				frame = applyResumeRamp(frame, rampFramesLeft);
-				rampFramesLeft--;
-			}
-			// Publish the playout phase for playoutState()/the HUD (volatile write,
-			// once per tick; cheap). deliveryPlaying==true == emitting real audio.
-			deliveryPlaying = playing;
-
-			for (AudioSink sink : sinks) {
-				try {
-					sink.accept(frame);
-				} catch (Throwable t) {
-					JockeyRadioMod.LOGGER.error("[jockey] sink accept failed station={}", stationKey, t);
-				}
-			}
-
-			long now = System.nanoTime();
-			if (now - lastOccupancy >= 1_000_000_000L) {
-				// One buffered-occupancy sample per second for the /jockey diag
-				// min/max/avg note (a small ring; cheap).
-				long nanoDeltaMs = (now - lastOccupancy) / 1_000_000L;
-				lastOccupancy = now;
-				// HOST/VM FREEZE DETECTOR: compare wall-clock elapsed to monotonic
-				// (nanoTime) elapsed over this ~1s window. Normally equal. If the OS/
-				// hypervisor SUSPENDS the process (e.g. WSL2 host freezing the guest, a
-				// paused container, host memory reclaim), the monotonic clock pauses while
-				// the wall clock keeps running - so wall >> nano by the frozen duration.
-				// This is invisible to our nanoTime-paced delivery (which stays perfect on
-				// its own clock) yet drains the client's sound-card buffer by exactly that
-				// gap, so it is THE server-side-measurable cause of an otherwise-unexplained
-				// hitch. On healthy hardware freezeMs stays ~0; a non-zero count here is an
-				// environment problem, not a mod bug.
-				long nowWallMs = System.currentTimeMillis();
-				long freezeMs = (nowWallMs - lastOccWallMs) - nanoDeltaMs;
-				lastOccWallMs = nowWallMs;
-				if (freezeMs >= HOST_FREEZE_THRESHOLD_MS) {
-					hostFreezeEvents.incrementAndGet();
-					hostFreezeMillis.addAndGet(freezeMs);
-					JockeyRadioMod.LOGGER.warn(
-							"[jockey] host stall station={} froze~{}ms (monotonic clock paused vs wall clock: the OS/VM "
-									+ "suspended the process, NOT the mod). A client playout buffer shallower than "
-									+ "~{}ms will hitch here.",
-							stationKey, freezeMs, freezeMs);
-				}
-				int occBuffered;
-				synchronized (bufferLock) {
-					occBuffered = buffer.size();
-				}
-				recordOccupancy(occBuffered);
-				// OCCUPANCY SERVO (sow-005 Phase B): once per second, nudge the WSOLA
-				// stretch factor to hold jitter-buffer occupancy at targetFrames. A slow
-				// PI loop (heavy integral, damping proportional term) that adapts over
-				// minutes and cannot chase short-term jitter (that is the buffer's job):
-				// occupancy below target -> stretch a touch MORE (slower, higher factor)
-				// to refill; above target -> ease toward 1.0. The integrator nulls the
-				// steady-state error so the factor converges to the source's exact inverse
-				// content-rate with no open-loop rate math; the factor is hard-clamped to
-				// the +/- budget. Frozen while not playing (no source to measure) and never
-				// runs in REBUFFER mode, so that path has zero residual effect.
-				if (stretcher != null && !stretchFailed && playing) {
-					double errSec = (targetFrames - occBuffered) / FRAMES_PER_SECOND;
-					// Integral path UNCHANGED: nulls the steady-state error over minutes on
-					// the RAW error, so the factor still converges to the source's exact
-					// inverse content-rate.
-					servoIntegral = clampStretch(servoIntegral + STRETCH_KI * errSec);
-					// Proportional path acts on an EMA-SMOOTHED error so second-to-second
-					// occupancy jitter (bursty fill / reconnect catch-up) cannot saturate the
-					// clamp at the 1 Hz update rate.
-					occErrEma += STRETCH_ERR_EMA_ALPHA * (errSec - occErrEma);
-					double desired = clampFactor(1.0 + servoIntegral + STRETCH_KP * occErrEma);
-					// Slew-limit the published factor to a small per-update delta so tempo
-					// only moves on the minutes timescale (no audible wow/flutter staircase),
-					// even during a large occupancy transient.
-					double delta = desired - stretchFactor;
-					if (delta > STRETCH_MAX_SLEW) {
-						delta = STRETCH_MAX_SLEW;
-					} else if (delta < -STRETCH_MAX_SLEW) {
-						delta = -STRETCH_MAX_SLEW;
-					}
-					stretchFactor = clampFactor(stretchFactor + delta);
-					currentStretchFactor = stretchFactor;
-				}
-				// PER-INTERVAL CSV DIAGNOSTICS (sow testing aid). Off by default:
-				// FeedDiagnostics.get() is null and this is skipped entirely. When on,
-				// emit one row of live state + delta counters, reusing occBuffered so no
-				// extra bufferLock read; the actual file write is async on the diag IO
-				// thread, so nothing here touches disk on the pacing path.
-				FeedDiagnostics diag = FeedDiagnostics.get();
-				if (diag != null && now - lastDiag >= diag.intervalNanos()) {
-					long nowMs = System.currentTimeMillis();
-					long fr = framesRead.get();
-					long de = framesDelivered.get();
-					long si = silenceFrames.get();
-					long dr = drops.get();
-					long ov = overflowDrops.get();
-					long un = underruns.get();
-					long ra = reanchors.get();
-					long rc = reconnects.get();
-					double elapsedSec = (now - lastDiag) / 1_000_000_000.0;
-					double expectedFrames = elapsedSec * FRAMES_PER_SECOND;
-					double deliverRt = expectedFrames > 0.0 ? (de - diagDelivered) / expectedFrames : 0.0;
-					double ingestRt = expectedFrames > 0.0 ? (fr - diagFramesRead) / expectedFrames : 0.0;
-					double stretch = currentStretchFactor;
-					double sourceRate = stretch > 0.0 ? 1.0 / stretch : 1.0;
-					double fillPct = targetFrames > 0 ? 100.0 * occBuffered / targetFrames : 0.0;
-					diag.record(String.format(Locale.ROOT,
-							"%d,%s,%s,%s,%s,%s,%b,%d,%d,%d,%d,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%.3f,%.3f,%.4f,%.4f,%d",
-							nowMs, FeedDiagnostics.TIME_FORMAT.format(Instant.ofEpochMilli(nowMs)),
-							stationKey, getClass().getSimpleName(), playoutState(), connectionState,
-							deliveryPlaying, occBuffered, occBuffered * FRAME_MILLIS,
-							targetFrames * FRAME_MILLIS, maxBufferFrames * FRAME_MILLIS, fillPct,
-							de - diagDelivered, si - diagSilence, un - diagUnderruns, dr - diagDrops,
-							ov - diagOverflow, ra - diagReanchors, rc - diagReconnects, fr - diagFramesRead,
-							deliverRt, ingestRt, stretch, sourceRate, freezeMs));
-					diagFramesRead = fr;
-					diagDelivered = de;
-					diagSilence = si;
-					diagDrops = dr;
-					diagOverflow = ov;
-					diagUnderruns = un;
-					diagReanchors = ra;
-					diagReconnects = rc;
-					lastDiag = now;
-				}
-			}
-			if (now - lastStats >= STATS_INTERVAL_NANOS) {
-				lastStats = now;
-				int buffered;
-				synchronized (bufferLock) {
-					buffered = buffer.size();
-				}
-				if (RadioConfig.get().feedStatsLogging) {
-					JockeyRadioMod.LOGGER.info(
-							"[jockey] feed stats station={} frames={} delivered={} silence={} drops={} reconnects={} "
-									+ "underruns={} buffered={} latencyMs={} targetMs={} hostFreezes={} hostFreezeMs={}",
-							stationKey, framesRead.get(), framesDelivered.get(), silenceFrames.get(),
-							drops.get(), reconnects.get(), underruns.get(), buffered,
-							buffered * FRAME_MILLIS, targetFrames * FRAME_MILLIS,
-							hostFreezeEvents.get(), hostFreezeMillis.get());
-				}
-				// Gate ONLY on hard-cap OVERFLOW drops: those are the frames raising
-				// maxBufferSeconds actually bounds. Hysteresis catch-up and stall-resync
-				// drops are a bounded latency correction the maxBuffer knob does not
-				// address (a single one can legitimately shed maxBufferFrames-targetFrames
-				// frames), so folding them in here would misattribute a normal correction
-				// to an overflow and push the operator at the wrong knob (sow-005 Phase 1).
-				long totalOverflowDrops = overflowDrops.get();
-				long overflowDelta = totalOverflowDrops - lastStatsOverflowDrops;
-				lastStatsOverflowDrops = totalOverflowDrops;
-				if (overflowDelta > DROPS_WARN_PER_STATS_INTERVAL) {
-					JockeyRadioMod.LOGGER.warn(
-							"[jockey] feed drops high station={} overflowLast30s={} maxBufferFrames={}; upstream "
-									+ "bursts exceed the jitter buffer's hard cap; raise 'maxBufferSeconds' in "
-									+ "jockey_radio.json",
-							stationKey, overflowDelta, maxBufferFrames);
-				}
-				checkIngestStall();
-			}
-
-			next += FRAME_NANOS;
-			long lead = next - now;
-			if (lead > 0) {
-				LockSupport.parkNanos(lead);
-			} else if (-lead > MAX_CATCHUP_LAG_NANOS) {
-				// Real delivery-thread scheduling stall (not upstream jitter): resync
-				// the pace clock to now, and shed the backlog the stall accumulated -
-				// but never below targetFrames, so this bulk drop cannot cut into the
-				// intended playout depth or fight the hysteresis trim. Any excess above
-				// target that remains is left for the trim's next high-water catch-up.
-				long skipped = (now - next) / FRAME_NANOS;
-				next = now;
-				if (skipped > 0) {
-					long dropped = 0L;
-					synchronized (bufferLock) {
-						for (long i = 0; i < skipped && buffer.size() > targetFrames; i++) {
-							buffer.pollFirst();
-							dropped++;
-						}
-					}
-					recordDrops(dropped, DropCause.CATCH_UP);
-				}
-			}
-		}
-	}
-
-	/**
-	 * A fresh, gain-ramped copy of {@code src} for the resume envelope (sow-005
-	 * Phase A, item 4). Gain rises linearly from ~0 to 1.0 across the whole
-	 * {@code RESUME_RAMP_FRAMES}-frame span: the frame currently being delivered is
-	 * index {@code RESUME_RAMP_FRAMES - framesLeft} (0-based), and within it each of
-	 * the {@link #FRAME_SAMPLES} s16 samples is scaled by
-	 * {@code (globalSampleIndex + 1) / (RESUME_RAMP_FRAMES * FRAME_SAMPLES)}, so the
-	 * very last ramp sample reaches full gain. Never mutates {@code src} (a sink may
-	 * retain the delivered array); allocates one frame, only on ramp ticks.
-	 */
-	/** Clamps the servo integrator to the +/- stretch budget (anti-windup). */
-	private double clampStretch(double v) {
-		return Math.max(-maxStretchFraction, Math.min(maxStretchFraction, v));
-	}
-
-	/** Hard-clamps the output stretch factor to {@code 1 +/- maxStretchFraction}. */
-	private double clampFactor(double v) {
-		return Math.max(1.0 - maxStretchFraction, Math.min(1.0 + maxStretchFraction, v));
-	}
-
-	private static short[] applyResumeRamp(short[] src, int framesLeft) {
-		int frameIndex = RESUME_RAMP_FRAMES - framesLeft;
-		int totalSamples = RESUME_RAMP_FRAMES * FRAME_SAMPLES;
-		int baseIndex = frameIndex * FRAME_SAMPLES;
-		short[] out = new short[FRAME_SAMPLES];
-		for (int i = 0; i < FRAME_SAMPLES; i++) {
-			double gain = (double) (baseIndex + i + 1) / (double) totalSamples;
-			out[i] = (short) Math.round(src[i] * gain);
-		}
-		return out;
-	}
-
-	// ------------------------------------------------------------------
-	// Process teardown
-	// ------------------------------------------------------------------
-
-	/**
-	 * destroy, 2&nbsp;s grace, then destroyForcibly. Safe on an already-dead
-	 * process. Only ever called from the ingest loop's {@code finally} block (a
-	 * feed executor thread) - never from {@link #stop()}, whose caller is
-	 * frequently the server thread and must not wait on the grace period.
-	 */
-	/**
-	 * Backstop for a STALLED-BUT-ALIVE ffmpeg. {@code readFrames} blocks on the child's
-	 * stdout with no deadline, so a child that stops producing without exiting parks the
-	 * ingest thread: the connection never "ends", the reconnect ladder never runs, and the
-	 * feed is silent while diag still reports {@code state=streaming}. The per-feed
-	 * {@code -rw_timeout} handles the common socket case; this catches everything else by
-	 * killing the child, which EOFs the read and hands over to the existing ladder.
-	 *
-	 * <p>Only fires for a connection that HAS streamed. A connection with no frames yet is
-	 * the normal state of an RTMP listener waiting for a publisher, and killing that would
-	 * break the listener the operator is waiting on.</p>
-	 *
-	 * <p>Runs on the delivery thread, from the 30 s stats tick.</p>
-	 */
-	private void checkIngestStall() {
-		if (!running) {
-			return;
-		}
-		Process p = process;
-		long last = lastIngestFrameNanos;
-		if (p == null || last == 0L || !p.isAlive()) {
-			return;
-		}
-		long stalledNanos = System.nanoTime() - last;
-		if (stalledNanos < INGEST_STALL_NANOS) {
-			return;
-		}
-		JockeyRadioMod.LOGGER.warn(
-				"[jockey] feed ingest stalled station={}; no audio from ffmpeg for {}s while the process is still "
-						+ "alive; restarting the connection",
-				stationKey, TimeUnit.NANOSECONDS.toSeconds(stalledNanos));
-		lastIngestFrameNanos = 0L;
-		// Only the NON-blocking SIGTERM here: this runs on the real-time delivery thread, which
-		// must never park on destroyProcess()'s 2 s grace wait (that would starve every listener
-		// mid-playout). p.destroy() closes ffmpeg's stdout, which unblocks the ingest thread's
-		// readFrames; that thread's own finally block then runs the full destroyProcess() with
-		// the grace period, where waiting IS allowed, and rides the reconnect ladder.
-		p.destroy();
-	}
-
-	private static void destroyProcess(Process p) {
-		p.destroy();
-		try {
-			if (!p.waitFor(PROCESS_STOP_GRACE_MILLIS, TimeUnit.MILLISECONDS)) {
-				p.destroyForcibly();
-			}
-		} catch (InterruptedException e) {
-			p.destroyForcibly();
-			Thread.currentThread().interrupt();
-		}
 	}
 }
