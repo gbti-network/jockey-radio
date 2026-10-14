@@ -124,6 +124,38 @@ tasks.withType(Test).configureEach {
 	inputs.dir('src/main/java')
 }
 
+// No hand-written source file may exceed 900 lines (the GBTI file-size rule). Part of `check`, so
+// `build` and CI fail on an oversized file. Generated and vendored output is not walked: build/,
+// .gradle/, node_modules/, lockfiles, and the gitignored .data/, .product/, .server/ trees.
+def maxSourceLines = 900
+def capped = files(
+		fileTree('src') { include '**/*' },
+		fileTree('tools') { include '**/*' },
+		fileTree('scripts') { include '**/*' },
+		fileTree('.github') { include '**/*' },
+		'build.gradle', 'settings.gradle', 'gradle.properties', 'package.json').asFileTree.matching {
+	include '**/*.java', '**/*.py', '**/*.mjs', '**/*.js', '**/*.sh', '**/*.bat', '**/*.gradle',
+			'**/*.json', '**/*.css', '**/*.html', '**/*.yml', '**/*.yaml', '**/*.properties'
+	exclude '**/build/**', '**/.gradle/**', '**/node_modules/**', '**/__pycache__/**', '**/package-lock.json'
+}
+tasks.register('checkFileSize') {
+	group = 'verification'
+	description = "Fails if a hand-written source file is over ${maxSourceLines} lines."
+	inputs.files(capped)
+	def root = rootDir
+	doLast {
+		def over = capped.files.collect { f -> [f, f.readLines('UTF-8').size()] }
+				.findAll { it[1] > maxSourceLines }
+				.sort { -it[1] }
+		if (!over.isEmpty()) {
+			def lines = over.collect { "  ${it[1]} lines  ${root.toPath().relativize(it[0].toPath())}" }
+			throw new GradleException("Files over the ${maxSourceLines}-line cap (split them along their seams):\n"
+					+ lines.join('\n'))
+		}
+	}
+}
+tasks.named('check') { dependsOn 'checkFileSize' }
+
 // Fast, offline unit tests. The live connector checks are tagged "connector" and excluded here
 // so a normal build never depends on the network or on yt-dlp being installed.
 tasks.named('test', Test) {
