@@ -569,12 +569,12 @@ public final class DialogRouter {
 		def.discId = edit ? editId : tag.getStringOr("disc_id", "");
 		def.name = tag.getStringOr("name", "");
 		String color = tag.getStringOr("name_color", "#37C871");
-		def.nameColorHex = advanceColor ? JockeyRadioDialogs.nextColorHex(color) : color;
+		def.nameColorHex = advanceColor ? DialogWidgets.nextColorHex(color) : color;
 		// The base disc (style) rides in the button payload, exactly like the colour.
 		// Advance it one STYLES step when the style cycler was clicked, else keep the
 		// current value so Preview / colour-cycle never lose the chosen style.
 		String baseDisc = tag.getStringOr("base_disc", "");
-		def.baseDisc = advanceStyle ? JockeyRadioDialogs.nextBaseDisc(baseDisc)
+		def.baseDisc = advanceStyle ? DialogWidgets.nextBaseDisc(baseDisc)
 				: (baseDisc.isBlank() ? DiscDefinition.DEFAULT_BASE_DISC : baseDisc);
 		// The name style (sow-010) rides in the payload too; advance it one step on the
 		// name-style cycler, else keep it so the other buttons never lose it.
