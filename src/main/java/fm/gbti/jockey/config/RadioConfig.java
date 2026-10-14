@@ -176,7 +176,11 @@ public final class RadioConfig {
 	 * gap the target was sized to bridge.</p>
 	 */
 	public Double prerollSeconds;
-	/** Reconnect backoff cap: 2,4,8,... seconds up to this value. */
+	/**
+	 * Longest wait between reconnect attempts, in seconds (2..3600). Caps the 2,4,8,...
+	 * backoff and every step of the HLS reconnect ladder, so a station that comes back on
+	 * air is picked up within this long.
+	 */
 	public int reconnectBackoffMaxSeconds = 60;
 
 	/**

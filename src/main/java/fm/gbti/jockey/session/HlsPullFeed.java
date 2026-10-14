@@ -28,8 +28,12 @@ public final class HlsPullFeed extends AbstractFfmpegFeed {
 	 * zeroes {@code attempt}, snapping the ladder back to the top. This REPLACES the
 	 * base geometric backoff for HLS (the base doubling still runs but HLS's
 	 * {@link #reconnectDelayMillis} ignores it, exactly as RTMP ignores it for its fast
-	 * re-listen). {@code reconnectBackoffMaxSeconds} is intentionally NOT applied here -
-	 * the ladder is the authoritative HLS schedule.
+	 * re-listen).
+	 *
+	 * <p>Every step is capped at {@code reconnectBackoffMaxSeconds} (default 60&nbsp;s).
+	 * Uncapped, a station that was off air for about 15&nbsp;minutes reached the 1&nbsp;h
+	 * tier and stayed silent for up to an hour after it came back. An operator who wants
+	 * the full ladder sets the cap to 3600.</p>
 	 */
 	private static final int[] LADDER_TIER_COUNTS  = {5, 10, 10, 5};
 	private static final long[] LADDER_TIER_SECONDS = {2L, 30L, 60L, 3600L};
@@ -159,17 +163,22 @@ public final class HlsPullFeed extends AbstractFfmpegFeed {
 
 	/**
 	 * The HLS reconnect ladder (sow-005 Phase A, item 3), keyed off the 1-based
-	 * consecutive {@code attempt}; ignores {@code backoffSeconds}/{@code idle} (the
-	 * ladder is HLS's authoritative schedule and applies whether the ended connection
-	 * was a 404-idle off-air station or a hard error - both should back off toward
-	 * 1&nbsp;h rather than hammer the origin). The loop's healthy-streak reset zeroes
-	 * {@code attempt} and snaps the ladder back to the top after 30&nbsp;s of streaming.
+	 * consecutive {@code attempt} and capped at {@code reconnectBackoffMaxSeconds}; ignores
+	 * {@code backoffSeconds}/{@code idle} (the ladder applies whether the ended connection
+	 * was a 404-idle off-air station or a hard error - both back off rather than hammer
+	 * the origin). The loop's healthy-streak reset zeroes {@code attempt} and snaps the
+	 * ladder back to the top after 30&nbsp;s of streaming.
 	 */
 	@Override
 	protected long reconnectDelayMillis(long backoffSeconds, boolean idle, long attempt) {
-		long seconds = ladderSeconds(attempt);
+		long seconds = delaySeconds(attempt, maxBackoffSeconds);
 		this.reconnectTierSeconds = seconds;
 		return TimeUnit.SECONDS.toMillis(seconds);
+	}
+
+	/** The ladder delay for a 1-based attempt, capped at {@code capSeconds}. */
+	static long delaySeconds(long attempt, long capSeconds) {
+		return Math.min(ladderSeconds(attempt), Math.max(1L, capSeconds));
 	}
 
 	/** Maps a 1-based consecutive attempt to its ladder-tier delay (seconds). */
