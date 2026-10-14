@@ -51,6 +51,17 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	private static final long FAST_ERROR_RETRY_ATTEMPTS = 5L;
 	/** Ceiling for the escalated error delay, so a freed port is still picked up promptly. */
 	private static final long MAX_ERROR_RESPAWN_DELAY_MILLIS = 60_000L;
+	/**
+	 * ffmpeg {@code -rw_timeout}, in microseconds. {@code -listen 1} serves exactly one client, so
+	 * a TCP client that connects and then sends nothing (a port scanner, a stuck relay) used to
+	 * hold the listener forever and lock the real publisher out. With a read timeout that client
+	 * is dropped after 10&nbsp;s and the listener respawns. Waiting for a publisher to connect is
+	 * not a read, so an empty listener still waits indefinitely, and a live publisher sends audio
+	 * continuously, so 10&nbsp;s of nothing means it is gone.
+	 */
+	static final String READ_TIMEOUT_MICROS = "10000000";
+	/** ffmpeg's line when a client connected but never completed the RTMP handshake. */
+	private static final String HANDSHAKE_TIMEOUT = "Unable to read handshake";
 	/** First-frame hold so a wrong-key rejection always lands before any audio is offered. */
 	private static final long ADMISSION_DELAY_MILLIS = 250L;
 	/** ffmpeg's stream-name mismatch warning; the name the publisher sent sits between the groups. */
@@ -81,6 +92,7 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 				// audible gap before audio resumed. FLV/RTMP declares its AAC track
 				// in the header, so a 0.5s / 512 KB probe detects it reliably.
 				"-fflags", "nobuffer", "-analyzeduration", "500000", "-probesize", "524288",
+				"-rw_timeout", READ_TIMEOUT_MICROS,
 				"-listen", "1", "-i", listenUrl,
 				"-vn", "-f", "s16le", "-ar", "48000", "-ac", "1", "pipe:1"
 		};
@@ -118,10 +130,21 @@ public final class RtmpReceiveFeed extends AbstractFfmpegFeed {
 	 * that. Peeking the shared {@code lastStderrLine()} instead would let a fatal
 	 * line left over from an EARLIER connection misclassify this connection's
 	 * normal disconnect as an error.</p>
+	 *
+	 * <p>A client dropped by the read timeout before it finished the handshake is idle too,
+	 * even though ffmpeg follows it with the same "Error opening input" line a bind failure
+	 * prints: the listener itself is fine, so it re-listens on the short idle delay instead of
+	 * escalating like a port that cannot be bound.</p>
 	 */
 	@Override
 	protected boolean classifyIdle(StderrDrain drain) {
-		return drain != null && !drain.sawFatal.get();
+		return drain != null && (drain.sawIdle.get() || !drain.sawFatal.get());
+	}
+
+	/** A client that connected but never completed the handshake (dropped by the read timeout). */
+	@Override
+	protected boolean isIdleStderr(String line) {
+		return line.contains(HANDSHAKE_TIMEOUT);
 	}
 
 	/**
