@@ -35,6 +35,11 @@ public final class FileLoopFeed extends AbstractFfmpegFeed {
 	private final String displayUrl;
 	/** sow-012: loop the file forever (true) or play it once and stop (false). */
 	private final boolean repeat;
+	/**
+	 * Frames already read in this play-once pass, so a retry after the input broke off
+	 * resumes there ({@code -ss}) instead of replaying the start. Ingest thread only.
+	 */
+	private long resumeFrames;
 
 	public FileLoopFeed(String stationKey, StationEndpoints.Endpoint endpoint, String ffmpegBinary,
 			int maxBufferFrames, int targetFrames, int prerollFrames, long maxBackoffSeconds,
@@ -71,6 +76,11 @@ public final class FileLoopFeed extends AbstractFfmpegFeed {
 			cmd.add("-stream_loop");
 			cmd.add("-1");
 		}
+		if (!repeat && resumeFrames > 0) {
+			// Input seek, so it must precede -i: pick up where the broken connection stopped.
+			cmd.add("-ss");
+			cmd.add(String.format(java.util.Locale.ROOT, "%.3f", resumeFrames * (FRAME_MILLIS / 1000.0)));
+		}
 		cmd.addAll(java.util.List.of(
 				// HTTP-only whitelist (no file:) - same guardrail as HlsPullFeed. Local files are
 				// served over the mod's internal loopback HTTP endpoint.
@@ -78,6 +88,11 @@ public final class FileLoopFeed extends AbstractFfmpegFeed {
 				"-i", effectiveUrl,
 				"-vn", "-f", "s16le", "-ar", "48000", "-ac", "1", "pipe:1"));
 		return cmd.toArray(new String[0]);
+	}
+
+	@Override
+	protected void onInputFailed(long framesRead) {
+		resumeFrames += framesRead;
 	}
 
 	/** A file is always finite, so repeat-off stops after one play. */

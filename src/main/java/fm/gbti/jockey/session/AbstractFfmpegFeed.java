@@ -233,6 +233,11 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		final AtomicBoolean sawFatal = new AtomicBoolean();
 		/** Set by {@link #isRejectStderr}: this connection's audio must never be offered. */
 		final AtomicBoolean sawRejected = new AtomicBoolean();
+		/**
+		 * The input broke off before its end (a dropped or cut-off connection). ffmpeg then
+		 * still exits 0, so this is how the ingest loop tells a failure from a clean end.
+		 */
+		final AtomicBoolean sawInputError = new AtomicBoolean();
 		final CountDownLatch done = new CountDownLatch(1);
 	}
 
@@ -471,6 +476,14 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 	 */
 	protected long reconnectDelayMillis(long backoffSeconds, boolean idle, long attempt) {
 		return TimeUnit.SECONDS.toMillis(backoffSeconds);
+	}
+
+	/**
+	 * sow-012: a play-once connection broke off after reading {@code framesRead} frames and is
+	 * about to be retried. Default no-op, so the retry starts the input again from the top; a
+	 * feed that can seek its input overrides this to resume where it stopped.
+	 */
+	protected void onInputFailed(long framesRead) {
 	}
 
 	/** Called once per spawned process, right after spawn. Default no-op. */

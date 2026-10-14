@@ -30,6 +30,12 @@ final class FeedIngestLoop {
 	private static final long HEALTHY_STREAK_NANOS = TimeUnit.SECONDS.toNanos(30);
 
 	private static final long PROCESS_STOP_GRACE_MILLIS = 2000L;
+	/**
+	 * Consecutive failed connections, with no healthy streak between them, after which a
+	 * play-once disc is finished anyway, so a source that always breaks at the same point
+	 * cannot retry forever.
+	 */
+	static final int MAX_PLAY_ONCE_FAILURES = 5;
 	private static final long STDERR_DRAIN_JOIN_MILLIS = 1000L;
 
 	private final AbstractFfmpegFeed feed;
@@ -47,6 +53,7 @@ final class FeedIngestLoop {
 	void runIngestLoop() {
 		long backoffSeconds = INITIAL_BACKOFF_SECONDS;
 		long attempt = 0;
+		int playOnceFailures = 0;
 		while (feed.running && !Thread.currentThread().isInterrupted()) {
 			feed.connectionState = "connecting";
 			// Per-connection reset, so a value left by the PREVIOUS connection cannot make
@@ -57,6 +64,8 @@ final class FeedIngestLoop {
 			String reason;
 			Process p = null;
 			StderrDrain drain = null;
+			int exitCode = -1;
+			long framesBefore = stats.framesRead.get();
 			try {
 				p = spawnProcess();
 				feed.process = p;
@@ -73,6 +82,7 @@ final class FeedIngestLoop {
 				feed.process = null;
 				if (p != null) {
 					destroyProcess(p);
+					exitCode = exitValue(p);
 				}
 			}
 			if (!feed.running || Thread.currentThread().isInterrupted()) {
@@ -84,13 +94,31 @@ final class FeedIngestLoop {
 			// sow-012: a finite source (repeat off) that STREAMED to its end plays once and stops
 			// instead of respawning/looping. Gated on firstFrameNanos >= 0 so a resolve/startup
 			// failure (never streamed) still retries below rather than parking a never-played disc.
-			// The delivery loop drains the retained buffer then goes silent; playoutState() -> "ended".
+			// Only a CLEAN end finishes it: ffmpeg exited 0 and the input did not break off. A
+			// dropped connection mid-track also exits 0, so without the stderr check every
+			// network hiccup ended the disc early. The delivery loop drains the retained buffer
+			// then goes silent; playoutState() -> "ended".
 			if (feed.stopAtEndOfInput() && firstFrameNanos >= 0) {
-				feed.inputEnded = true;
-				feed.connectionState = "ended";
-				JockeyRadioMod.LOGGER.info("[jockey] feed end-of-input station={} (repeat off); playing once, stopping",
-						feed.stationKey);
-				break;
+				boolean clean = "exit".equals(reason) && exitCode == 0
+						&& (drain == null || !drain.sawInputError.get());
+				if (lastFrameNanos - firstFrameNanos >= HEALTHY_STREAK_NANOS) {
+					playOnceFailures = 0;
+				}
+				if (!clean) {
+					playOnceFailures++;
+				}
+				if (clean || playOnceFailures >= MAX_PLAY_ONCE_FAILURES) {
+					if (!clean) {
+						JockeyRadioMod.LOGGER.warn("[jockey] feed input failed {} times in a row station={}; "
+								+ "ending the play-once disc", playOnceFailures, feed.stationKey);
+					}
+					feed.inputEnded = true;
+					feed.connectionState = "ended";
+					JockeyRadioMod.LOGGER.info("[jockey] feed end-of-input station={} (repeat off); playing once, stopping",
+							feed.stationKey);
+					break;
+				}
+				feed.onInputFailed(stats.framesRead.get() - framesBefore);
 			}
 
 			stats.reconnects.incrementAndGet();
@@ -316,6 +344,9 @@ final class FeedIngestLoop {
 				if (feed.isFatalStderr(line)) {
 					drain.sawFatal.set(true);
 				}
+				if (isInputError(line)) {
+					drain.sawInputError.set(true);
+				}
 				if (feed.isRejectStderr(line) && drain.sawRejected.compareAndSet(false, true)) {
 					JockeyRadioMod.LOGGER.warn("[jockey] feed rejected a connection station={}: {}",
 							feed.stationKey, feed.sanitize(line));
@@ -326,6 +357,24 @@ final class FeedIngestLoop {
 			}
 		} catch (IOException ignored) {
 			// Process destroyed under us - expected on stop/reconnect.
+		}
+	}
+
+	/**
+	 * ffmpeg's lines for an input that broke off before its end: a read error is reported as
+	 * "Error during demuxing", and an HTTP body shorter than its Content-Length as "Stream ends
+	 * prematurely". ffmpeg 9.0.2 prints them and still exits 0.
+	 */
+	static boolean isInputError(String line) {
+		return line.contains("Error during demuxing") || line.contains("Stream ends prematurely");
+	}
+
+	/** The exit status of a process that has been destroyed, or -1 if it is still running. */
+	private static int exitValue(Process p) {
+		try {
+			return p.exitValue();
+		} catch (IllegalThreadStateException stillRunning) {
+			return -1;
 		}
 	}
 
