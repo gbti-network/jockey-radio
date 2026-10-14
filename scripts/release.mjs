@@ -82,7 +82,7 @@ function gitOk(...a) { return tryRun('git', a); }
 
 async function confirm(question) {
   if (ASSUME_YES) return true;
-  if (!process.stdin.isTTY) die('not a TTY - re-run with --yes to skip the confirmation prompt');
+  if (!process.stdin.isTTY) die('not a TTY; re-run with --yes to skip the confirmation prompt');
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise((res) => rl.question(question + ' ', res));
   rl.close();
@@ -121,7 +121,7 @@ function bumpSemver(current, spec) {
   if (spec === 'major') return `${maj + 1}.0.0`;
   if (spec === 'minor') return `${maj}.${min + 1}.0`;
   if (spec === 'patch') return `${maj}.${min}.${pat + 1}`;
-  die(`unknown bump "${spec}" - use patch | minor | major | x.y.z`);
+  die(`unknown bump "${spec}"; use patch | minor | major | x.y.z`);
 }
 
 // ---- toolchain: locate a JDK 25 so the gradle build never fails on JAVA_HOME
@@ -177,7 +177,7 @@ function runBuild(javaHome, wslBuild) {
       '-d', wslBuild.distro, '--', 'bash', '-lc', command,
     ], { cwd: ROOT, stdio: 'inherit', shell: false });
   }
-  warn('no JDK 25 found via JAVA_HOME, ~/.jdks, or WSL - relying on the Gradle toolchain');
+  warn('no JDK 25 found via JAVA_HOME, ~/.jdks, or WSL; relying on the Gradle toolchain');
   return spawnSync(GRADLEW, ['clean', 'build'], { cwd: ROOT, stdio: 'inherit', shell: false });
 }
 
@@ -410,7 +410,7 @@ async function main() {
     if (pat) {
       githubToken = pat.trim();
       ghEnv.GH_TOKEN = githubToken;
-      if (!DRY) warn('gh unavailable or not logged in - using GITHUB_PAT from .env');
+      if (!DRY) warn('gh unavailable or not logged in; using GITHUB_PAT from .env');
     }
     else if (!DRY && !NO_RELEASE) die('gh CLI is not authenticated. Run `gh auth login` (or set GITHUB_PAT in .env).');
   }
