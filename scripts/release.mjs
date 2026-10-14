@@ -16,13 +16,20 @@
 //   npm run release:dry        # print the plan and run the checks, change nothing
 //   npm run release:build      # bump + build + commit + push, but DO NOT create the GH release
 //
+// A release must carry the bundled binaries (the zero-touch install depends on them) and each one
+// must match the SHA-256 the bundled notice lists. A THIN jar (built without .product/) is
+// refused unless --allow-thin is passed; a partial set or a hash the notice does not list is
+// always refused, because the notice that ships would then be wrong.
+//
 // JOCKEY_RELEASE_API_BASE overrides https://api.github.com for the REST path (used when the gh
 // CLI is not logged in), so the flow can be exercised against a local stand-in.
 //
 // Zero dependencies (Node built-ins only), so no `npm install` is needed.
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { inflateRawSync } from 'node:zlib';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -51,6 +58,7 @@ const positionals = args.filter((a) => !a.startsWith('--'));
 const DRY = flags.has('--dry-run');
 const NO_RELEASE = flags.has('--no-release');
 const ASSUME_YES = flags.has('--yes');
+const ALLOW_THIN = flags.has('--allow-thin');
 // Last positional wins, so `release:minor -- 1.0.0` lets an explicit version override the default.
 const bumpSpec = positionals.length ? positionals[positionals.length - 1] : 'patch';
 
@@ -164,6 +172,65 @@ function runBuild(javaHome, wslBuild) {
   }
   warn('no JDK 25 found via JAVA_HOME, ~/.jdks, or WSL - relying on the Gradle toolchain');
   return spawnSync(GRADLEW, ['clean', 'build'], { cwd: ROOT, stdio: 'inherit', shell: false });
+}
+
+// ---- jar contents: the bundled binaries and the notice that lists their hashes
+// Jar resource names, as config/BundledBinaries extracts them.
+const BUNDLED = [
+  'jockey_radio/bin/linux-amd64/ffmpeg',
+  'jockey_radio/bin/linux-amd64/yt-dlp',
+  'jockey_radio/bin/windows-amd64/ffmpeg.exe',
+  'jockey_radio/bin/windows-amd64/yt-dlp.exe',
+];
+const NOTICE_ENTRY = 'jockey_radio/THIRD-PARTY-NOTICES.txt';
+
+// A minimal zip reader (central directory, stored and deflated entries), enough for our own jar.
+function readJar(file) {
+  const buf = readFileSync(file);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 0xffff); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error(`${path.basename(file)} is not a zip file`);
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  if (count === 0xffff || p === 0xffffffff) throw new Error(`${path.basename(file)} is a zip64 archive, which this check does not read`);
+  const entries = new Map();
+  for (let n = 0; n < count; n++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error(`${path.basename(file)} has a corrupt central directory`);
+    const nameLen = buf.readUInt16LE(p + 28);
+    entries.set(buf.toString('utf8', p + 46, p + 46 + nameLen), {
+      method: buf.readUInt16LE(p + 10), size: buf.readUInt32LE(p + 20), offset: buf.readUInt32LE(p + 42),
+    });
+    p += 46 + nameLen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  const read = (name) => {
+    const e = entries.get(name);
+    if (!e) return null;
+    const start = e.offset + 30 + buf.readUInt16LE(e.offset + 26) + buf.readUInt16LE(e.offset + 28);
+    const data = buf.subarray(start, start + e.size);
+    if (e.method === 0) return data;
+    if (e.method === 8) return inflateRawSync(data);
+    throw new Error(`${name} uses zip method ${e.method}, which this check does not read`);
+  };
+  return { has: (name) => entries.has(name), read };
+}
+
+// What is wrong with the jar's bundled set: { thin } when it has no binaries at all, else the
+// list of problems (a missing binary or notice, or a hash the notice does not list).
+function inspectBundle(jarPath) {
+  const jar = readJar(jarPath);
+  const present = BUNDLED.filter((n) => jar.has(n));
+  if (present.length === 0) return { thin: true, problems: [] };
+  const problems = BUNDLED.filter((n) => !jar.has(n)).map((n) => `missing ${n}`);
+  const notice = jar.read(NOTICE_ENTRY);
+  if (!notice) return { thin: false, problems: [...problems, `missing ${NOTICE_ENTRY}`] };
+  const listed = notice.toString('utf8');
+  for (const n of present) {
+    const sha = createHash('sha256').update(jar.read(n)).digest('hex');
+    if (!listed.includes(sha)) problems.push(`${n} has SHA-256 ${sha}, which the bundled notice does not list`);
+  }
+  return { thin: false, problems };
 }
 
 // ---- publishers: the same four steps through the gh CLI or the REST API ----
@@ -346,8 +413,19 @@ async function main() {
   if (build.status !== 0) throw new Error('gradle build failed');
   if (!existsSync(jarPath)) throw new Error(`expected jar not found: ${jarPath}`);
   const jarMb = (readFileSync(jarPath).length / 1e6).toFixed(1);
-  if (Number(jarMb) < 5) warn(`jar is only ${jarMb} MB - looks like a THIN jar (no .product/ binaries bundled)`);
-  else log(C.dim(`    built ${jarName} (${jarMb} MB)`));
+  log(C.dim(`    built ${jarName} (${jarMb} MB)`));
+  const bundle = inspectBundle(jarPath);
+  if (bundle.thin) {
+    const why = 'the jar is THIN: it bundles no binaries (.product/ was missing at build time)';
+    if (NO_RELEASE || ALLOW_THIN) warn(why + (NO_RELEASE ? '' : '; releasing it because of --allow-thin'));
+    else throw new Error(`${why}. Rebuild with .product/ in place, or pass --allow-thin to release it anyway.`);
+  } else if (bundle.problems.length) {
+    const list = bundle.problems.map((p) => '\n    ' + p).join('');
+    if (NO_RELEASE) warn('the bundled set does not match its notice:' + list);
+    else throw new Error('the bundled set does not match its notice, so the notice that ships would be wrong:' + list);
+  } else {
+    log(C.dim(`    bundles ${BUNDLED.length} binaries, each listed by SHA-256 in the bundled notice`));
+  }
 
   // 3. Commit and tag, locally ------------------------------------------------
   step('committing and tagging locally');
