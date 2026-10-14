@@ -408,7 +408,7 @@ public final class RadioConfig {
 	 * granularity is ~1s because the dump piggybacks the once-per-second occupancy
 	 * sampler. Only meaningful when {@link #feedDiagnostics} is on.
 	 */
-	public double feedDiagnosticsIntervalSeconds = 1.0;
+	public double feedDiagnosticsIntervalSeconds = DEFAULT_FEED_DIAGNOSTICS_INTERVAL_SECONDS;
 	/**
 	 * Diagnostics output file, relative to the server working directory or an
 	 * absolute path. {@code null} (default) uses {@code diagnostics/feed-diagnostics.csv}.

@@ -118,4 +118,7 @@ final class ConfigLimits {
 	static final int DEFAULT_OPUS_FEC_PACKET_LOSS = 0;
 	static final int MIN_OPUS_FEC_PACKET_LOSS = 0;
 	static final int MAX_OPUS_FEC_PACKET_LOSS = 100;
+
+	/** Default feed-diagnostics sample interval (seconds). */
+	static final double DEFAULT_FEED_DIAGNOSTICS_INTERVAL_SECONDS = 1.0;
 }

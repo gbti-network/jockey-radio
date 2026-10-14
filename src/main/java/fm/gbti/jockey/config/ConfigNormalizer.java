@@ -171,7 +171,8 @@ final class ConfigNormalizer {
 			}
 		}
 		// sow-005 Phase B: max time-stretch magnitude (percent), clamped 0..6. The feed
-		// hard-clamps the servo factor to 1 +/- this/100. Absent uses the default.
+		// hard-clamps the servo factor to 1 +/- this/100. Absent (or non-finite) uses the default.
+		loaded.maxStretchPercent = finiteOrAbsent("maxStretchPercent", loaded.maxStretchPercent);
 		double stretchPct = loaded.maxStretchPercent != null
 				? loaded.maxStretchPercent : DEFAULT_MAX_STRETCH_PERCENT;
 		double clampedStretchPct = clamp(stretchPct, 0.0, MAX_MAX_STRETCH_PERCENT);
@@ -181,6 +182,14 @@ final class ConfigNormalizer {
 					stretchPct, FILE_NAME, MAX_MAX_STRETCH_PERCENT, clampedStretchPct);
 		}
 		loaded.resolvedMaxStretchPercent = clampedStretchPct;
+		// FeedDiagnostics clamps the interval to 1..60 where it is used, which sends NaN to the
+		// minimum; a non-finite value is reset to the default here instead.
+		if (!Double.isFinite(loaded.feedDiagnosticsIntervalSeconds)) {
+			JockeyRadioMod.LOGGER.warn(
+					"feedDiagnosticsIntervalSeconds {} in {} is not a finite number; using default {}",
+					loaded.feedDiagnosticsIntervalSeconds, FILE_NAME, DEFAULT_FEED_DIAGNOSTICS_INTERVAL_SECONDS);
+			loaded.feedDiagnosticsIntervalSeconds = DEFAULT_FEED_DIAGNOSTICS_INTERVAL_SECONDS;
+		}
 		resolveBuffering(loaded);
 	}
 
@@ -199,6 +208,14 @@ final class ConfigNormalizer {
 	 * {@code preroll,target <= max} and every count is at least one frame.</p>
 	 */
 	static void resolveBuffering(RadioConfig c) {
+		// A non-finite key counts as absent, so the default (or the legacy migration) applies.
+		// createDefault()'s values are finite, so this is a no-op there.
+		c.targetBufferSeconds = finiteOrAbsent("targetBufferSeconds", c.targetBufferSeconds);
+		c.maxBufferSeconds = finiteOrAbsent("maxBufferSeconds", c.maxBufferSeconds);
+		c.prerollSeconds = finiteOrAbsent("prerollSeconds", c.prerollSeconds);
+		c.reanchorLowWatermarkSeconds = finiteOrAbsent("reanchorLowWatermarkSeconds", c.reanchorLowWatermarkSeconds);
+		c.reanchorSustainSeconds = finiteOrAbsent("reanchorSustainSeconds", c.reanchorSustainSeconds);
+
 		// --- target: steady-state playout latency ---
 		double targetSec = c.targetBufferSeconds != null ? c.targetBufferSeconds : DEFAULT_TARGET_BUFFER_SECONDS;
 		double clampedTarget = clamp(targetSec, MIN_TARGET_BUFFER_SECONDS, MAX_TARGET_BUFFER_SECONDS);
@@ -328,5 +345,18 @@ final class ConfigNormalizer {
 
 	private static double clamp(double value, double min, double max) {
 		return Math.max(min, Math.min(max, value));
+	}
+
+	/**
+	 * {@code value}, or {@code null} (absent, so the default applies) when it is NaN or an
+	 * infinity, with one warning. Gson reads the file leniently, so those literals parse, and
+	 * {@link #clamp} cannot stop NaN: every comparison with it is false.
+	 */
+	private static Double finiteOrAbsent(String key, Double value) {
+		if (value == null || Double.isFinite(value)) {
+			return value;
+		}
+		JockeyRadioMod.LOGGER.warn("{} {} in {} is not a finite number; using the default", key, value, FILE_NAME);
+		return null;
 	}
 }
