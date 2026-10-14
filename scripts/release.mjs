@@ -3,12 +3,21 @@
 // LOCALLY (the fat jar bundles the ffmpeg/yt-dlp binaries from .product/, which CI cannot see),
 // tags + pushes, and publishes a GitHub Release with the jar attached.
 //
+// Order matters, because a push cannot be taken back. Every local step (version bump, build,
+// commit, tag) runs first. Then the release is created as a DRAFT and every asset is uploaded
+// to it, then the branch and tag go up in one atomic push, and only then is the draft
+// published. A failure before the push deletes the draft and undoes the local steps; a failure
+// after it leaves the remote alone and says exactly what is left to do by hand.
+//
 //   npm run release            # patch bump  (0.1.0 -> 0.1.1)
 //   npm run release:minor      # minor bump  (0.1.0 -> 0.2.0)
 //   npm run release:major      # major bump  (0.1.0 -> 1.0.0)
 //   npm run release -- 0.4.0   # explicit version
-//   npm run release:dry        # print the plan, change nothing
+//   npm run release:dry        # print the plan and run the checks, change nothing
 //   npm run release:build      # bump + build + commit + push, but DO NOT create the GH release
+//
+// JOCKEY_RELEASE_API_BASE overrides https://api.github.com for the REST path (used when the gh
+// CLI is not logged in), so the flow can be exercised against a local stand-in.
 //
 // Zero dependencies (Node built-ins only), so no `npm install` is needed.
 
@@ -23,6 +32,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const IS_WIN = process.platform === 'win32';
 const GRADLEW = IS_WIN ? path.join(ROOT, 'gradlew.bat') : path.join(ROOT, 'gradlew');
 const ARCHIVE_BASE = 'jockey-radio';
+const API_BASE = (process.env.JOCKEY_RELEASE_API_BASE || 'https://api.github.com').replace(/\/+$/, '');
 
 const C = { // tiny ANSI helpers; degrade to plain text where color is unwanted
   dim: (s) => `\x1b[2m${s}\x1b[0m`, bold: (s) => `\x1b[1m${s}\x1b[0m`,
@@ -156,7 +166,41 @@ function runBuild(javaHome, wslBuild) {
   return spawnSync(GRADLEW, ['clean', 'build'], { cwd: ROOT, stdio: 'inherit', shell: false });
 }
 
-async function createReleaseViaApi({ token, tag, title, jarPath, jarName }) {
+// ---- publishers: the same four steps through the gh CLI or the REST API ----
+// createDraft makes a draft release (GitHub creates no tag for a draft, and uses the tag we push
+// once it is published); upload attaches one file; publish turns draft off and marks it latest;
+// deleteDraft removes the draft and never touches a tag.
+
+function ghPublisher(env) {
+  const gh = (a) => spawnSync('gh', a, { cwd: ROOT, env, shell: false, encoding: 'utf8' });
+  const fail = (what, r) => new Error(`${what} failed: ${(r.stderr || r.stdout || '').trim()}`);
+  let tag = null;
+  return {
+    name: 'gh CLI',
+    async createDraft({ tag: t, title, branch }) {
+      const r = gh(['release', 'create', t, '--draft', '--title', title, '--generate-notes', '--target', branch]);
+      if (r.status !== 0) throw fail('gh release create --draft', r);
+      tag = t;
+      return { url: (r.stdout || '').trim() };
+    },
+    async upload(file) {
+      const r = gh(['release', 'upload', tag, file]);
+      if (r.status !== 0) throw fail(`gh release upload ${path.basename(file)}`, r);
+    },
+    async publish() {
+      const r = gh(['release', 'edit', tag, '--draft=false', '--latest']);
+      if (r.status !== 0) throw fail('gh release edit --draft=false', r);
+      return (gh(['release', 'view', tag, '--json', 'url', '--jq', '.url']).stdout || '').trim();
+    },
+    async deleteDraft() {
+      if (!tag) return;
+      const r = gh(['release', 'delete', tag, '--yes']);
+      if (r.status !== 0) throw fail('gh release delete', r);
+    },
+  };
+}
+
+function apiPublisher(token) {
   if (!token) die('GitHub CLI is unavailable and GITHUB_PAT is not set in .env');
   const remote = git('remote', 'get-url', 'origin');
   const match = remote.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/);
@@ -168,29 +212,58 @@ async function createReleaseViaApi({ token, tag, title, jarPath, jarName }) {
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'jockey-radio-release',
   };
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tag_name: tag, name: title, generate_release_notes: true,
-      draft: false, prerelease: false, make_latest: 'true',
-    }),
-  });
-  if (!response.ok) throw new Error(`GitHub release API failed (${response.status}): ${await response.text()}`);
-  const release = await response.json();
-  const bytes = readFileSync(jarPath);
-  const uploadUrl = release.upload_url.replace(/\{.*$/, '') + `?name=${encodeURIComponent(jarName)}`;
-  const upload = await fetch(uploadUrl, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/java-archive' },
-    body: bytes,
-  });
-  if (!upload.ok) throw new Error(`GitHub asset upload failed (${upload.status}): ${await upload.text()}`);
-  return release.html_url;
+  const call = async (method, url, body, type = 'application/json') => {
+    const res = await fetch(url, { method, headers: { ...headers, 'Content-Type': type }, body });
+    if (!res.ok) throw new Error(`GitHub API ${method} ${new URL(url).pathname} failed (${res.status}): ${await res.text()}`);
+    return res.status === 204 ? null : res.json();
+  };
+  const releases = `${API_BASE}/repos/${owner}/${repo}/releases`;
+  let release = null;
+  return {
+    name: 'GitHub REST API',
+    async createDraft({ tag, title, branch }) {
+      release = await call('POST', releases, JSON.stringify({
+        tag_name: tag, target_commitish: branch, name: title, generate_release_notes: true,
+        draft: true, prerelease: false,
+      }));
+      return { url: release.html_url };
+    },
+    async upload(file) {
+      const name = path.basename(file);
+      const url = release.upload_url.replace(/\{.*$/, '') + `?name=${encodeURIComponent(name)}`;
+      await call('POST', url, readFileSync(file), contentType(name));
+    },
+    async publish() {
+      const done = await call('PATCH', `${releases}/${release.id}`, JSON.stringify({ draft: false, make_latest: 'true' }));
+      return done.html_url;
+    },
+    async deleteDraft() {
+      if (!release) return;
+      await call('DELETE', `${releases}/${release.id}`);
+    },
+  };
+}
+
+function contentType(name) {
+  if (name.endsWith('.jar')) return 'application/java-archive';
+  if (name.endsWith('.tar.gz')) return 'application/gzip';
+  if (name.endsWith('.tar.xz')) return 'application/x-xz';
+  if (name.endsWith('.zip')) return 'application/zip';
+  return 'application/octet-stream';
+}
+
+// ---- remote checks ---------------------------------------------------------
+// Read-only. They run against the push URL, the place the release will actually go.
+function remoteRef(pushUrl, ref) {
+  const r = gitOk('ls-remote', pushUrl, ref);
+  if (r.code !== 0) die(`cannot reach ${pushUrl}: ${r.err}`);
+  return (r.out.split(/\s+/)[0] || '').trim();
 }
 
 // ---- main ------------------------------------------------------------------
-const undo = []; // rollback actions, run in reverse on failure
+const undo = []; // local rollback actions, run in reverse while nothing has left the machine
+const remote = { draft: null, publisher: null, pushed: false, tag: '', branch: '' };
+
 async function main() {
   process.chdir(ROOT);
   if (!existsSync(GRADLEW)) die(`gradle wrapper not found at ${GRADLEW}`);
@@ -216,6 +289,11 @@ async function main() {
   // A dry run only previews, so a dirty tree is fine (and expected). A real release requires clean.
   if (dirty && !DRY) die('working tree has uncommitted changes - commit or stash them first:\n' + dirty);
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
+  if (branch === 'HEAD') die('detached HEAD: check out the branch to release from');
+  const pushUrl = git('remote', 'get-url', '--push', 'origin');
+  // Chosen now, so a missing token or an unreadable origin stops the run before anything changes.
+  const publisher = NO_RELEASE || (DRY && !hasGh && !githubToken) ? null
+    : hasGh ? ghPublisher(ghEnv) : apiPublisher(githubToken);
 
   // Compute the new version + build number -----------------------------------
   const props = readProps();
@@ -231,8 +309,13 @@ async function main() {
   const jarPath = path.join(ROOT, 'build', 'libs', jarName);
   const title = `${tag} (build ${newBuild})`;
 
-  // Guard: tag must not already exist ----------------------------------------
-  if (gitOk('rev-parse', tag).code === 0) die(`git tag ${tag} already exists - bump to a different version`);
+  // Guards: the tag is new everywhere, and the push will fast-forward ---------
+  if (gitOk('rev-parse', '-q', '--verify', `refs/tags/${tag}`).code === 0) die(`git tag ${tag} already exists locally; bump to a different version`);
+  if (remoteRef(pushUrl, `refs/tags/${tag}`)) die(`tag ${tag} already exists on origin; bump to a different version`);
+  const remoteHead = remoteRef(pushUrl, `refs/heads/${branch}`);
+  if (remoteHead && gitOk('merge-base', '--is-ancestor', remoteHead, 'HEAD').code !== 0) {
+    die(`origin/${branch} has commits this checkout lacks. Pull first, so the push cannot be rejected halfway.`);
+  }
 
   // Plan ---------------------------------------------------------------------
   log('');
@@ -242,16 +325,19 @@ async function main() {
   log(`    build number  ${C.dim(props.build_number)} → ${C.green(newBuild)}`);
   log(`    jar           ${jarName}`);
   log(`    git tag       ${tag}`);
-  log(`    GitHub release${NO_RELEASE ? C.yellow('  (skipped: --no-release)') : `  ${title}`}`);
+  log(`    GitHub release${NO_RELEASE ? C.yellow('  (skipped: --no-release)') : `  ${title} via ${publisher ? publisher.name : 'nothing (no gh login or GITHUB_PAT)'}`}`);
+  log(`    order         bump, build, commit, tag${NO_RELEASE ? '' : ', draft + upload'}, atomic push${NO_RELEASE ? '' : ', publish'}`);
   log('');
-  if (DRY) { log(C.yellow('dry run - no changes made.')); return; }
+  if (DRY) { log(C.yellow('dry run: checks passed, no changes made.')); return; }
   if (!(await confirm(`Proceed with release ${C.bold(tag)}?  [y/N]`))) die('aborted.');
 
   // 1. Bump version files -----------------------------------------------------
   step('updating version files');
   writePkgVersion(newVersion);
   writeProps({ mod_version: newVersion, build_number: newBuild });
-  undo.push(() => { writePkgVersion(pkgVersion); writeProps({ mod_version: props.mod_version, build_number: props.build_number }); });
+  undo.push(['restored package.json and gradle.properties', () => {
+    writePkgVersion(pkgVersion); writeProps({ mod_version: props.mod_version, build_number: props.build_number });
+  }]);
 
   // 2. Build the jar ----------------------------------------------------------
   step('building the mod jar (local fat jar with bundled binaries)');
@@ -263,50 +349,75 @@ async function main() {
   if (Number(jarMb) < 5) warn(`jar is only ${jarMb} MB - looks like a THIN jar (no .product/ binaries bundled)`);
   else log(C.dim(`    built ${jarName} (${jarMb} MB)`));
 
-  // 3. Commit, tag, push ------------------------------------------------------
-  step('committing, tagging and pushing');
+  // 3. Commit and tag, locally ------------------------------------------------
+  step('committing and tagging locally');
   git('add', 'package.json', 'gradle.properties');
   // Author identity comes from the repo config (gbtilabs); message carries no trailers.
   git('commit', '-m', `Release ${tag} (build ${newBuild})`);
-  undo.push(() => gitOk('reset', '--hard', 'HEAD~1'));
+  // --keep, not --hard: it refuses rather than discard anything that changed since.
+  undo.push(['removed the release commit', () => git('reset', '--keep', 'HEAD~1')]);
   git('tag', '-a', tag, '-m', `Jockey Radio ${title}`);
-  undo.push(() => gitOk('tag', '-d', tag));
-  git('push', 'origin', branch);
-  git('push', 'origin', tag);
-  undo.push(() => gitOk('push', 'origin', ':refs/tags/' + tag)); // delete remote tag on rollback
+  undo.push([`deleted the local tag ${tag}`, () => git('tag', '-d', tag)]);
 
-  // 4. GitHub Release ---------------------------------------------------------
+  // Everything local has passed. From here on, things leave the machine. --------
+  remote.tag = tag;
+  remote.branch = branch;
+
+  // 4. Draft release with every asset ------------------------------------------
+  if (!NO_RELEASE) {
+    remote.publisher = publisher;
+    step(`creating a draft release via ${publisher.name}`);
+    remote.draft = await publisher.createDraft({ tag, title, branch });
+    for (const file of [jarPath]) {
+      step(`uploading ${path.basename(file)}`);
+      await publisher.upload(file);
+    }
+  }
+
+  // 5. One atomic push: the branch and the tag land together or not at all ------
+  step(`pushing ${branch} and ${tag} (atomic)`);
+  git('push', '--atomic', 'origin', branch, `refs/tags/${tag}`);
+  remote.pushed = true;
+
   if (NO_RELEASE) {
     log('');
     log(C.green('✓ ') + `pushed ${tag}. GitHub release skipped (--no-release).`);
     return;
   }
-  step('creating the GitHub release and attaching the jar');
-  let url;
-  if (hasGh) {
-    const rel = spawnSync('gh', [
-      'release', 'create', tag, jarPath,
-      '--title', title,
-      '--generate-notes',
-      '--latest',
-      '--verify-tag',
-    ], { cwd: ROOT, stdio: 'inherit', env: ghEnv, shell: false });
-    if (rel.status !== 0) throw new Error('gh release create failed');
-    url = tryRun('gh', ['release', 'view', tag, '--json', 'url', '--jq', '.url'], { env: ghEnv }).out;
-  } else {
-    url = await createReleaseViaApi({ token: githubToken, tag, title, jarPath, jarName });
-  }
+
+  // 6. Publish the draft --------------------------------------------------------
+  step('publishing the release');
+  const url = await remote.publisher.publish();
   log('');
   log(C.green('✓ ') + C.bold(`released ${title}`));
   if (url) log('  ' + url);
 }
 
-main().catch((e) => {
+// What a failure leaves behind, said plainly. Before the push, the draft is deleted and the local
+// steps are undone; after it, nothing is touched, because origin already has the commit and tag.
+async function recover(e) {
   console.error(C.red('\n✗ release failed: ') + (e.message || e));
-  if (undo.length) {
-    warn('rolling back...');
-    for (const fn of undo.reverse()) { try { fn(); } catch { /* best effort */ } }
-    warn('rolled back local version bump / commit / tag. If a GitHub release was created, delete it manually.');
+  if (remote.pushed) {
+    warn(`origin already has ${remote.branch} at the release commit and the tag ${remote.tag}; nothing was rolled back.`);
+    if (remote.draft) {
+      warn(`the draft release holds every asset${remote.draft.url ? `: ${remote.draft.url}` : ''}`);
+      warn(`publish it by hand: gh release edit ${remote.tag} --draft=false --latest (or in the GitHub web UI)`);
+    }
+    return;
   }
-  process.exit(1);
-});
+  if (remote.draft) {
+    try {
+      await remote.publisher.deleteDraft();
+      warn('deleted the draft release; nothing was pushed.');
+    } catch (err) {
+      warn(`could not delete the draft release (${err.message}). Delete it by hand${remote.draft.url ? `: ${remote.draft.url}` : ''}`);
+    }
+  } else if (remote.tag) {
+    warn('nothing was pushed and no release was created.');
+  }
+  for (const [what, fn] of undo.reverse()) {
+    try { fn(); warn(what); } catch (err) { warn(`could not undo (${what}): ${err.message}`); }
+  }
+}
+
+main().catch(async (e) => { await recover(e); process.exit(1); });
