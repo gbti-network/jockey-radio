@@ -2,12 +2,16 @@ package fm.gbti.jockey.disc;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -71,6 +75,12 @@ public final class DiscDefinition {
 	/** New UI-created RTMP discs target remote/managed-host publishers by default. */
 	public static final String NEW_RTMP_BIND = "0.0.0.0";
 	public static final int DEFAULT_RADIUS_BLOCKS = 32;
+
+	/** Host names of cloud instance metadata services. */
+	private static final Set<String> METADATA_HOSTS = Set.of(
+			"metadata", "metadata.google.internal", "metadata.goog", "instance-data", "instance-data.ec2.internal");
+	/** AWS's IPv6 instance metadata address (the IPv4 one is in 169.254.0.0/16). */
+	private static final byte[] AWS_METADATA_V6 = InetAddress.ofLiteral("fd00:ec2::254").getAddress();
 
 	public String discId;
 	public String name;
@@ -400,6 +410,10 @@ public final class DiscDefinition {
 		if (!m.matches()) {
 			return Optional.of("host must be a valid host[:port]");
 		}
+		int colon = host.indexOf(':');
+		if (isMetadataTarget(colon < 0 ? host : host.substring(0, colon))) {
+			return Optional.of("host must not point at a link-local or cloud metadata address");
+		}
 		if (m.group(1) != null) {
 			int port = Integer.parseInt(m.group(1));
 			if (port < 1 || port > 65535) {
@@ -466,7 +480,102 @@ public final class DiscDefinition {
 		if (uri.getHost() == null || uri.getHost().isBlank()) {
 			return Optional.of(field + " must have a non-blank host");
 		}
+		if (isMetadataTarget(uri.getHost())) {
+			return Optional.of(field + " must not point at a link-local or cloud metadata address");
+		}
 		return Optional.empty();
+	}
+
+	/**
+	 * True for a host that names a cloud metadata service or a link-local address
+	 * (169.254.0.0/16, fe80::/10, AWS's fd00:ec2::254), read the way ffmpeg's resolver reads
+	 * it: {@code 0251.254.169.254} is octal for 169.254.169.254 there. A Minecraft operator is
+	 * not always the host operator, and these addresses answer only on the host itself.
+	 *
+	 * <p>Only the literal is checked, never DNS: a public name that resolves to one of these
+	 * addresses, or a redirect to one, is not caught here. Loopback and private ranges stay
+	 * allowed, because the local audio server and LAN stations use them.</p>
+	 */
+	static boolean isMetadataTarget(String rawHost) {
+		if (rawHost == null) {
+			return false;
+		}
+		String host = rawHost.trim().toLowerCase(Locale.ROOT);
+		if (host.startsWith("[") && host.endsWith("]")) {
+			host = host.substring(1, host.length() - 1);
+		}
+		while (host.endsWith(".")) {
+			host = host.substring(0, host.length() - 1);
+		}
+		if (METADATA_HOSTS.contains(host)) {
+			return true;
+		}
+		if (host.indexOf(':') >= 0) {
+			InetAddress v6;
+			try {
+				v6 = InetAddress.ofLiteral(host); // a literal parse; never a DNS lookup
+			} catch (IllegalArgumentException notALiteral) {
+				return false;
+			}
+			if (v6 instanceof Inet4Address mapped) {
+				return isLinkLocalV4(mapped.getAddress());
+			}
+			byte[] b = v6.getAddress();
+			boolean v4Mapped = b[10] == (byte) 0xFF && b[11] == (byte) 0xFF
+					&& Arrays.equals(b, 0, 10, new byte[10], 0, 10);
+			return v6.isLinkLocalAddress() || Arrays.equals(b, AWS_METADATA_V6)
+					|| (v4Mapped && isLinkLocalV4(Arrays.copyOfRange(b, 12, 16)));
+		}
+		long v4 = inetAton(host);
+		return v4 >= 0 && (v4 >>> 16) == 0xA9FE;
+	}
+
+	private static boolean isLinkLocalV4(byte[] a) {
+		return (a[0] & 0xFF) == 169 && (a[1] & 0xFF) == 254;
+	}
+
+	/**
+	 * An IPv4 address in any form inet_aton accepts (1 to 4 dot-separated parts, each decimal,
+	 * octal with a leading 0, or hex with 0x), or -1 when {@code host} is not one.
+	 */
+	static long inetAton(String host) {
+		String[] parts = host.split("\\.", -1);
+		if (parts.length < 1 || parts.length > 4) {
+			return -1;
+		}
+		long[] values = new long[parts.length];
+		for (int i = 0; i < parts.length; i++) {
+			String part = parts[i];
+			int radix = 10;
+			if (part.startsWith("0x")) {
+				radix = 16;
+				part = part.substring(2);
+			} else if (part.length() > 1 && part.startsWith("0")) {
+				radix = 8;
+				part = part.substring(1);
+			}
+			if (part.isEmpty() || part.length() > 11 || part.charAt(0) == '-' || part.charAt(0) == '+') {
+				return -1;
+			}
+			try {
+				values[i] = Long.parseLong(part, radix);
+			} catch (NumberFormatException notNumeric) {
+				return -1;
+			}
+		}
+		long result = 0;
+		for (int i = 0; i < values.length - 1; i++) {
+			if (values[i] > 0xFF) {
+				return -1;
+			}
+			result = (result << 8) | values[i];
+		}
+		int lastBits = 8 * (5 - values.length);
+		long last = values[values.length - 1];
+		if (last >= (1L << lastBits)) {
+			return -1;
+		}
+		return (result << lastBits) | last;
 	}
 
 	/**
