@@ -13,9 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Server-side game-music suppression: while a player stands within a playing
- * SavePoint disc's audible radius, hard-mutes that player's own vanilla
- * background music so Minecraft's music track never fights the streamed radio.
+ * Server-side game-music suppression: while a player stands within the audible
+ * radius of a disc that is delivering audio, hard-mutes that player's own vanilla
+ * background music so Minecraft's music track never fights the streamed radio. A
+ * radio that is silent (an off-air station, an RTMP listener with no publisher, a
+ * source that keeps failing) leaves the game music alone.
  *
  * <p>Purely server→client, so it needs no client mod and works for every vanilla
  * player: a throttled server-thread sweep (~1s) sends each in-range player a
@@ -87,8 +89,7 @@ public final class MusicSuppressor {
 	// ------------------------------------------------------------------
 
 	private void sweep(MinecraftServer server) {
-		// The sessions actually able to play audio this sweep (ACTIVE, non-inert,
-		// backed by a real streaming feed - the same gate NowPlayingHud uses).
+		// The sessions delivering audio this sweep (ACTIVE, non-inert, feed streaming).
 		List<RadioSession> playing = new ArrayList<>();
 		for (RadioSession session : RadioManager.get().getSessions()) {
 			if (isPlaying(session)) {
@@ -144,14 +145,19 @@ public final class MusicSuppressor {
 		return false;
 	}
 
-	/** A session actually able to play audio: ACTIVE, not inert, backed by a real feed. */
+	/**
+	 * A session delivering audio now: ACTIVE, not inert, and its feed past pre-roll and
+	 * emitting frames. A feed merely existing is not enough: an off-air station or an RTMP
+	 * listener with no publisher is a real feed that plays silence. Brief rebuffers are not
+	 * covered, which is harmless: the client's music manager waits minutes before it starts
+	 * the next track.
+	 */
 	private static boolean isPlaying(RadioSession session) {
 		if (session.state() != RadioSession.State.ACTIVE || session.isInert()) {
 			return false;
 		}
-		// identity() is the namespaced feed-registry key; a real streaming feed
-		// (not a StubStationFeed) means the session can actually play audio.
-		return FeedRegistry.get().feedIsStreaming(session.identity());
+		// identity() is the namespaced feed-registry key.
+		return "streaming".equals(FeedRegistry.get().feedPlayoutState(session.identity()));
 	}
 
 	private MusicSuppressor() {
