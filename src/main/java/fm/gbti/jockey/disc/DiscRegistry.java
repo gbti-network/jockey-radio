@@ -167,7 +167,7 @@ public final class DiscRegistry {
 	 * Validates each raw entry into {@code fresh}. Returns true if ANY entry was rejected or
 	 * silently dropped, so {@link #load} can protect the on-disk file from a destructive save.
 	 */
-	private boolean parseEntries(Map<String, DiscDefinition> loaded, Map<String, DiscDefinition> fresh) {
+	static boolean parseEntries(Map<String, DiscDefinition> loaded, Map<String, DiscDefinition> fresh) {
 		boolean dropped = false;
 		for (Map.Entry<String, DiscDefinition> entry : loaded.entrySet()) {
 			String key = entry.getKey();
@@ -184,6 +184,12 @@ public final class DiscRegistry {
 			String normalizedKey = key == null ? null : key.trim().toLowerCase(Locale.ROOT);
 			if (def.discId == null || def.discId.isBlank()) {
 				def.discId = normalizedKey;
+			}
+			// Older builds let direction overrides and invisible characters into the name and the
+			// marquee. Cleaning them here keeps such a disc playing; validate() would drop it.
+			if (def.stripHiddenCharacters()) {
+				JockeyRadioMod.LOGGER.warn("[jockey] disc '{}' in {}: removed invisible or control characters "
+						+ "from its name or marquee", key, FILE_NAME);
 			}
 			def.applyDefaults();
 			if (normalizedKey != null && !normalizedKey.equals(def.discId)) {

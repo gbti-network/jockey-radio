@@ -150,6 +150,55 @@ public final class DiscDefinition {
 	}
 
 	/**
+	 * True for a code point that hides, reorders or breaks displayed text: controls (C0, DEL,
+	 * C1), line and paragraph separators, text-direction marks, embeddings, overrides and
+	 * isolates, zero-width and other invisible format characters, and unpaired surrogates. The
+	 * zero-width joiner and the emoji tag characters are allowed, because emoji sequences such
+	 * as a family or a subdivision flag are built from them.
+	 */
+	static boolean isHidden(int cp) {
+		int type = Character.getType(cp);
+		if (type == Character.FORMAT) {
+			return cp != 0x200D && (cp < 0xE0020 || cp > 0xE007F);
+		}
+		return type == Character.CONTROL || type == Character.SURROGATE
+				|| type == Character.LINE_SEPARATOR || type == Character.PARAGRAPH_SEPARATOR;
+	}
+
+	/** {@link #isHidden}, plus the section sign that starts a legacy colour code. */
+	private static boolean isRefusedInText(int cp) {
+		return cp == '§' || isHidden(cp);
+	}
+
+	private static String withoutRefused(String text) {
+		StringBuilder sb = new StringBuilder(text.length());
+		text.codePoints().filter(cp -> !isRefusedInText(cp)).forEach(sb::appendCodePoint);
+		return sb.toString();
+	}
+
+	/**
+	 * Removes refused characters from the name and the marquee template. Only the load path
+	 * calls this, so a disc written by an older build that allowed them still loads; a new
+	 * entry is refused by {@link #validate()} instead, and the admin sees why.
+	 *
+	 * @return whether anything was removed
+	 */
+	public boolean stripHiddenCharacters() {
+		boolean changed = false;
+		if (name != null) {
+			String clean = withoutRefused(name);
+			changed = !clean.equals(name);
+			name = clean;
+		}
+		if (nowPlayingTemplate != null) {
+			String clean = withoutRefused(nowPlayingTemplate);
+			changed |= !clean.equals(nowPlayingTemplate);
+			nowPlayingTemplate = clean;
+		}
+		return changed;
+	}
+
+	/**
 	 * Fills in blank/absent optional fields with their defaults. Called after
 	 * Gson load and before use so a hand-edited file missing e.g. {@code baseDisc}
 	 * still works. Does not touch required fields (those are validated instead).
@@ -253,13 +302,12 @@ public final class DiscDefinition {
 		// The name is rendered verbatim (/jockey list, the give message) and
 		// written into the item name component. Control characters (newlines etc.)
 		// and the legacy section sign let a hostile name inject apparent output
-		// lines or colour codes, so reject them - matching the character discipline
-		// on discId/streamKey/host.
-		for (int i = 0; i < name.length(); i++) {
-			char c = name.charAt(i);
-			if (c < 0x20 || c == 0x7F || c == '§') {
-				return Optional.of("name must not contain control characters or section signs");
-			}
+		// lines or colour codes, and direction overrides or invisible characters make
+		// it read as something it is not, so reject them - matching the character
+		// discipline on discId/streamKey/host.
+		if (name.codePoints().anyMatch(DiscDefinition::isRefusedInText)) {
+			return Optional.of("name must not contain control characters, invisible or text-direction "
+					+ "characters, or section signs");
 		}
 		if (nameColorHex == null || !HEX_COLOR.matcher(nameColorHex).matches()) {
 			// Do not echo the client-controlled value back into the error string:
@@ -291,11 +339,9 @@ public final class DiscDefinition {
 			if (nowPlayingTemplate.length() > 128) {
 				return Optional.of("nowPlayingTemplate must be 128 characters or fewer");
 			}
-			for (int i = 0; i < nowPlayingTemplate.length(); i++) {
-				char c = nowPlayingTemplate.charAt(i);
-				if (c < 0x20 || c == 0x7F || c == '§') {
-					return Optional.of("nowPlayingTemplate must not contain control characters or section signs");
-				}
+			if (nowPlayingTemplate.codePoints().anyMatch(DiscDefinition::isRefusedInText)) {
+				return Optional.of("nowPlayingTemplate must not contain control characters, invisible or "
+						+ "text-direction characters, or section signs");
 			}
 		}
 		return switch (sourceType) {
@@ -399,6 +445,10 @@ public final class DiscDefinition {
 			if (c <= 0x20 || c == 0x7F) {
 				return Optional.of(field + " must not contain whitespace or control characters");
 			}
+		}
+		// The disc page shows this URL, so it may not hide or reorder its own text either.
+		if (value.codePoints().anyMatch(DiscDefinition::isHidden)) {
+			return Optional.of(field + " must not contain invisible or text-direction characters");
 		}
 		URI uri;
 		try {
