@@ -21,6 +21,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Third-party notes: this mod compiles against the Simple Voice Chat plugin API
 (de.maxhenkel.voicechat:voicechat-api) as a compile-only dependency; none of that
 API's code is bundled in the released jar. The release jar additionally bundles the
-ffmpeg (LGPL), yt-dlp (Unlicense), and deno (MIT) executables, which it runs as
-separate processes. Their notices and full license texts are included inside the
+ffmpeg (LGPL) and yt-dlp (Unlicense) executables, which it runs as separate
+processes. Their notices and full license texts are included inside the
 release jar under jockey_radio/THIRD-PARTY-NOTICES.txt and jockey_radio/licenses/.
