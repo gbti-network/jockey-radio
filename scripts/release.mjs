@@ -21,6 +21,13 @@
 // refused unless --allow-thin is passed; a partial set or a hash the notice does not list is
 // always refused, because the notice that ships would then be wrong.
 //
+// The notice also promises that every release carries the corresponding source of the bundled
+// ffmpeg: the FFmpeg source at the commit it was built from, and the BtbN FFmpeg-Builds scripts
+// that built it. Both are attached to the release from .product/sources/, named as GitHub's
+// archive download names them (FFmpeg-<commit>.tar.gz, FFmpeg-Builds-<commit>.tar.gz; .tar.xz
+// and .zip also work). A missing archive stops the release before anything changes, and the
+// error prints the download commands. Update SOURCE_ARCHIVES whenever the bundled ffmpeg changes.
+//
 // JOCKEY_RELEASE_API_BASE overrides https://api.github.com for the REST path (used when the gh
 // CLI is not logged in), so the flow can be exercised against a local stand-in.
 //
@@ -184,6 +191,33 @@ const BUNDLED = [
 ];
 const NOTICE_ENTRY = 'jockey_radio/THIRD-PARTY-NOTICES.txt';
 
+// The corresponding source attached to every release (see the header). The commits must match
+// the ones the bundled notice names; inspectBundle checks that.
+const SOURCES_DIR = path.join(ROOT, '.product', 'sources');
+const SOURCE_ARCHIVES = [
+  { what: 'FFmpeg source', repo: 'FFmpeg/FFmpeg', base: 'FFmpeg', commit: '7e93014c5bbb61e7c22afebb478bf92f7a08d59a' },
+  { what: 'BtbN FFmpeg-Builds scripts', repo: 'BtbN/FFmpeg-Builds', base: 'FFmpeg-Builds', commit: '63ac3265b0789ea16c7b1f8351cd2ad195a28722' },
+];
+
+// The archive on disk for each SOURCE_ARCHIVES entry: { found: [paths], missing: [entries] }.
+function findSourceArchives() {
+  const names = existsSync(SOURCES_DIR) ? readdirSync(SOURCES_DIR) : [];
+  const found = [];
+  const missing = [];
+  for (const s of SOURCE_ARCHIVES) {
+    const hits = names.filter((n) => [`${s.base}-${s.commit}.tar.gz`, `${s.base}-${s.commit}.tar.xz`, `${s.base}-${s.commit}.zip`].includes(n));
+    if (hits.length === 1) found.push(path.join(SOURCES_DIR, hits[0]));
+    else if (hits.length === 0) missing.push(s);
+    else die(`${s.what}: more than one archive in .product/sources/ (${hits.join(', ')}); keep one`);
+  }
+  return { found, missing };
+}
+
+function sourcesHelp(missing) {
+  return missing.map((s) => `\n    ${s.what} (${s.repo} at ${s.commit}):`
+    + `\n      curl -fL -o .product/sources/${s.base}-${s.commit}.tar.gz https://github.com/${s.repo}/archive/${s.commit}.tar.gz`).join('');
+}
+
 // A minimal zip reader (central directory, stored and deflated entries), enough for our own jar.
 function readJar(file) {
   const buf = readFileSync(file);
@@ -229,6 +263,9 @@ function inspectBundle(jarPath) {
   for (const n of present) {
     const sha = createHash('sha256').update(jar.read(n)).digest('hex');
     if (!listed.includes(sha)) problems.push(`${n} has SHA-256 ${sha}, which the bundled notice does not list`);
+  }
+  for (const s of SOURCE_ARCHIVES) {
+    if (!listed.includes(s.commit)) problems.push(`the bundled notice does not name ${s.repo} commit ${s.commit}; update SOURCE_ARCHIVES in scripts/release.mjs`);
   }
   return { thin: false, problems };
 }
@@ -383,6 +420,12 @@ async function main() {
   if (remoteHead && gitOk('merge-base', '--is-ancestor', remoteHead, 'HEAD').code !== 0) {
     die(`origin/${branch} has commits this checkout lacks. Pull first, so the push cannot be rejected halfway.`);
   }
+  // The ffmpeg source the notice promises. With --allow-thin it may be absent, but only if the jar
+  // then turns out thin (no ffmpeg ships, so there is no source to offer); that is checked after the build.
+  const sources = NO_RELEASE ? { found: [], missing: [] } : findSourceArchives();
+  if (sources.missing.length && !ALLOW_THIN) {
+    die('the release must attach the ffmpeg source the notice promises, and .product/sources/ lacks:' + sourcesHelp(sources.missing));
+  }
 
   // Plan ---------------------------------------------------------------------
   log('');
@@ -391,6 +434,9 @@ async function main() {
   log(`    version       ${C.dim(pkgVersion)} → ${C.green(newVersion)}`);
   log(`    build number  ${C.dim(props.build_number)} → ${C.green(newBuild)}`);
   log(`    jar           ${jarName}`);
+  if (!NO_RELEASE) {
+    log(`    source        ${sources.found.length ? sources.found.map((f) => path.basename(f)).join(', ') : C.yellow('none (allowed only if the jar is thin)')}`);
+  }
   log(`    git tag       ${tag}`);
   log(`    GitHub release${NO_RELEASE ? C.yellow('  (skipped: --no-release)') : `  ${title} via ${publisher ? publisher.name : 'nothing (no gh login or GITHUB_PAT)'}`}`);
   log(`    order         bump, build, commit, tag${NO_RELEASE ? '' : ', draft + upload'}, atomic push${NO_RELEASE ? '' : ', publish'}`);
@@ -426,6 +472,10 @@ async function main() {
   } else {
     log(C.dim(`    bundles ${BUNDLED.length} binaries, each listed by SHA-256 in the bundled notice`));
   }
+  if (!NO_RELEASE && !bundle.thin && sources.missing.length) {
+    throw new Error('the jar bundles ffmpeg, so the release must attach its source, and .product/sources/ lacks:' + sourcesHelp(sources.missing));
+  }
+  const assets = [jarPath, ...(bundle.thin ? [] : sources.found)];
 
   // 3. Commit and tag, locally ------------------------------------------------
   step('committing and tagging locally');
@@ -446,7 +496,7 @@ async function main() {
     remote.publisher = publisher;
     step(`creating a draft release via ${publisher.name}`);
     remote.draft = await publisher.createDraft({ tag, title, branch });
-    for (const file of [jarPath]) {
+    for (const file of assets) {
       step(`uploading ${path.basename(file)}`);
       await publisher.upload(file);
     }
