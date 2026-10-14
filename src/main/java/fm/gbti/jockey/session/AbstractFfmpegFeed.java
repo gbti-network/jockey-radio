@@ -549,10 +549,10 @@ public abstract class AbstractFfmpegFeed implements StationFeed {
 		}
 		running = false;
 		deliveryPlaying = false;
-		Process p = process;
-		if (p != null) {
-			p.destroy();
-		}
+		// SIGTERM, then SIGKILL after a grace, without waiting here: the caller is often the
+		// server thread. The ingest thread cannot escalate on its own while it is parked on a
+		// read that only the child's death can end.
+		ProcessReaper.terminate(process);
 		// A subclass may own a HELPER child that is not the ffmpeg process (LinkResolvedFeed's
 		// yt-dlp resolve). Interrupting the ingest thread cannot free it - a read on a process
 		// pipe is not interruptible - so the subclass gets an explicit chance to kill it here.

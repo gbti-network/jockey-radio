@@ -662,7 +662,7 @@ final class FeedDeliveryLoop {
 	 *
 	 * <p>Runs on the delivery thread, from the 30 s stats tick.</p>
 	 */
-	private void checkIngestStall() {
+	void checkIngestStall() {
 		if (!feed.running) {
 			return;
 		}
@@ -679,12 +679,12 @@ final class FeedDeliveryLoop {
 				"[jockey] feed ingest stalled station={}; no audio from ffmpeg for {}s while the process is still "
 						+ "alive; restarting the connection",
 				feed.stationKey, TimeUnit.NANOSECONDS.toSeconds(stalledNanos));
-		feed.lastIngestFrameNanos = 0L;
-		// Only the NON-blocking SIGTERM here: this runs on the real-time delivery thread, which
-		// must never park on destroyProcess()'s 2 s grace wait (that would starve every listener
-		// mid-playout). p.destroy() closes ffmpeg's stdout, which unblocks the ingest thread's
-		// readFrames; that thread's own finally block then runs the full destroyProcess() with
-		// the grace period, where waiting IS allowed, and rides the reconnect ladder.
-		p.destroy();
+		// Non-blocking: this runs on the real-time delivery thread, which must never park on a
+		// grace wait (that would starve every listener mid-playout). The reaper sends SIGTERM and
+		// escalates to SIGKILL on its own timer; the child's death closes its stdout, which ends
+		// the ingest thread's read and rides the reconnect ladder. lastIngestFrameNanos is left
+		// as it is, so if the child were somehow still alive at the next tick the watchdog would
+		// fire again; the next connection resets it.
+		ProcessReaper.terminate(p);
 	}
 }
