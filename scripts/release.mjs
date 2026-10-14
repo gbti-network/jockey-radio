@@ -356,6 +356,31 @@ function contentType(name) {
   return 'application/octet-stream';
 }
 
+// ---- working tree ----------------------------------------------------------
+// Paths that feed the build or the release. An untracked file under one of these would change
+// what is built without being in the tagged commit, so the release could not be rebuilt from its
+// tag; an untracked file anywhere else (a screenshot in the root, notes) cannot reach the jar.
+const BUILD_INPUTS = ['src/', 'gradle/', 'scripts/', 'build.gradle', 'settings.gradle', 'gradle.properties',
+  'gradlew', 'gradlew.bat', 'LICENSE', 'package.json'];
+const isBuildInput = (f) => BUILD_INPUTS.some((p) => (p.endsWith('/') ? f.startsWith(p) : f === p));
+
+// { blocking: [...], ignored: [...] }. Every change to a tracked file blocks, wherever it is.
+function treeState() {
+  const r = spawnSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' });
+  if (r.status !== 0) die(`git status failed: ${(r.stderr || '').trim()}`);
+  const parts = (r.stdout || '').split('\0').filter(Boolean);
+  const blocking = [];
+  const ignored = [];
+  for (let i = 0; i < parts.length; i++) {
+    const code = parts[i].slice(0, 2);
+    const file = parts[i].slice(3);
+    if (code[0] === 'R' || code[0] === 'C') i++; // the next entry is the rename's source path
+    if (code === '??' && !isBuildInput(file)) ignored.push(file);
+    else blocking.push(parts[i]);
+  }
+  return { blocking, ignored };
+}
+
 // ---- remote checks ---------------------------------------------------------
 // Read-only. They run against the push URL, the place the release will actually go.
 function remoteRef(pushUrl, ref) {
@@ -389,9 +414,14 @@ async function main() {
     }
     else if (!DRY && !NO_RELEASE) die('gh CLI is not authenticated. Run `gh auth login` (or set GITHUB_PAT in .env).');
   }
-  const dirty = gitOk('status', '--porcelain').out;
-  // A dry run only previews, so a dirty tree is fine (and expected). A real release requires clean.
-  if (dirty && !DRY) die('working tree has uncommitted changes - commit or stash them first:\n' + dirty);
+  const tree = treeState();
+  const listed = (files) => files.slice(0, 20).map((f) => '\n    ' + f).join('') + (files.length > 20 ? `\n    (and ${files.length - 20} more)` : '');
+  // A dry run only previews, so a dirty tree is reported, not fatal. A real release requires clean.
+  if (tree.blocking.length) {
+    const why = 'the working tree has changes that would not be in the release commit; commit or stash them first:' + listed(tree.blocking);
+    if (DRY) warn(why); else die(why);
+  }
+  if (tree.ignored.length) warn(`ignoring ${tree.ignored.length} untracked file(s) outside the build inputs (they cannot reach the jar):` + listed(tree.ignored));
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
   if (branch === 'HEAD') die('detached HEAD: check out the branch to release from');
   const pushUrl = git('remote', 'get-url', '--push', 'origin');
