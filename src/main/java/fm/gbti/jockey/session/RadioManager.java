@@ -150,6 +150,7 @@ public final class RadioManager {
 		}
 		sweepSinkUpgrades();
 		sweepFinishedSessions();
+		FeedRegistry.get().expireIdle();
 	}
 
 	/**
@@ -203,6 +204,9 @@ public final class RadioManager {
 		}
 		// Always runs: it self-guards on `armed`, so the startup load is a no-op.
 		RtmpKeepAlive.get().onDiscsChanged();
+		// A feed nobody holds any more (an edited or deleted disc's live feed in its idle
+		// grace) stops now rather than when the grace runs out.
+		FeedRegistry.get().stopUnreferenced();
 		// Only ACTIVE sessions are restarted. A SUSPENDED session (its chunk unloaded) is left
 		// stopped so it rebuilds lazily and correctly on the next chunk load - reactivating it
 		// here would spawn a live feed and an SVC channel for a jukebox nobody can hear, which
@@ -502,7 +506,7 @@ public final class RadioManager {
 		// both stop together at end-of-input. Re-inserting replays from the top. Giving each
 		// jukebox its own feed would need the identity/key coupling above to be broken first.
 		String key = "disc:" + discId;
-		return new FeedSource(key, discId, radius, () -> {
+		return new FeedSource(key, discId, radius, def.ingestFingerprint(), () -> {
 			RadioConfig config = RadioConfig.get();
 			return switch (def.sourceType) {
 				case HLS_PULL -> new HlsPullFeed(discId, StationEndpoints.forDiscResolved(def, config),
@@ -557,7 +561,8 @@ public final class RadioManager {
 		int radius = snapshot != null ? snapshot.radiusBlocks : 32;
 		// Namespaced registry key ("station:") is disjoint from the admin "disc:"
 		// namespace; the feed still logs the bare station key (sow-001 unchanged).
-		return new FeedSource("station:" + stationKey, stationKey, radius, () -> {
+		String fingerprint = snapshot == null ? "" : snapshot.url + '|' + snapshot.token;
+		return new FeedSource("station:" + stationKey, stationKey, radius, fingerprint, () -> {
 			RadioConfig config = RadioConfig.get();
 			RadioConfig.Station station = config.stations.get(stationKey);
 			if (station == null || station.url == null || station.url.isBlank()) {

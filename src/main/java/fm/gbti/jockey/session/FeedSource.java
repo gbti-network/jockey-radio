@@ -20,6 +20,10 @@ import java.util.function.Supplier;
  *       station key (so sow-001's logs are unchanged). This, NOT {@link #key()},
  *       is what feeds report as their {@code stationKey}.</li>
  *   <li>{@link #radiusBlocks()} - the voicechat channel radius for the sink.</li>
+ *   <li>{@link #fingerprint()} - everything that shapes the ffmpeg command (URL, token,
+ *       RTMP bind/port/key...). The registry only hands an idle feed back to a source
+ *       with the same fingerprint, so an edit never resumes a stale feed. Holds
+ *       secrets: never logged.</li>
  *   <li>{@link #createRealFeed()} - builds the real ffmpeg-backed feed, or
  *       returns {@code null} to fall back to a stub (e.g. a config station that
  *       lost its URL). Invoked only when {@code ingest=ffmpeg} is verified,
@@ -32,12 +36,15 @@ public final class FeedSource {
 	private final String key;
 	private final String stationKey;
 	private final int radiusBlocks;
+	private final String fingerprint;
 	private final Supplier<StationFeed> realFeedFactory;
 
-	public FeedSource(String key, String stationKey, int radiusBlocks, Supplier<StationFeed> realFeedFactory) {
+	public FeedSource(String key, String stationKey, int radiusBlocks, String fingerprint,
+			Supplier<StationFeed> realFeedFactory) {
 		this.key = key;
 		this.stationKey = stationKey;
 		this.radiusBlocks = radiusBlocks;
+		this.fingerprint = fingerprint == null ? "" : fingerprint;
 		this.realFeedFactory = realFeedFactory;
 	}
 
@@ -53,6 +60,11 @@ public final class FeedSource {
 
 	public int radiusBlocks() {
 		return radiusBlocks;
+	}
+
+	/** The ingest settings this source's feed is built from. Contains secrets; never log it. */
+	String fingerprint() {
+		return fingerprint;
 	}
 
 	/** The real feed, or null to fall back to a stub. */

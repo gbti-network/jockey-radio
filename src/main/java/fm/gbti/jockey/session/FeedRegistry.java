@@ -7,6 +7,7 @@ import fm.gbti.jockey.config.RadioConfig;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Ref-counted registry of shared {@link StationFeed}s: the first session tuned
  * to a station starts its feed, the last one leaving stops it.
+ *
+ * <p>A LIVE feed (HLS station, RTMP listener, live platform stream) whose last holder
+ * leaves stays up for {@link #IDLE_GRACE_NANOS} first. Without that, a hopper cycling a
+ * disc in and out of a jukebox killed and respawned ffmpeg about twice a second. Only an
+ * acquire with the same {@link FeedSource#fingerprint()} picks an idle feed back up, so an
+ * edited disc always gets a fresh feed. A finite feed (file, VOD) still stops at once:
+ * re-inserting it is how a player restarts it from the top.</p>
  *
  * <p>Thread-safe (all state guarded by the registry lock), though feed
  * lifecycle calls in practice come from the server thread via
@@ -34,6 +42,8 @@ public final class FeedRegistry {
 
 	private static final FeedRegistry INSTANCE = new FeedRegistry();
 	private static final long DOCTOR_PROBE_TIMEOUT_SECONDS = 5;
+	/** How long a live feed outlives its last holder (see the class comment). */
+	static final long IDLE_GRACE_NANOS = TimeUnit.SECONDS.toNanos(5);
 
 	private final Object lock = new Object();
 	private final Map<String, Entry> feeds = new HashMap<>();
@@ -45,10 +55,19 @@ public final class FeedRegistry {
 
 	private static final class Entry {
 		final StationFeed feed;
+		/** {@link FeedSource#fingerprint()} the feed was built from. Contains secrets. */
+		final String fingerprint;
 		int refs;
+		/** {@code System.nanoTime()} when refs reached zero, or -1 while held. */
+		long idleSinceNanos = -1;
 
-		Entry(StationFeed feed) {
+		Entry(StationFeed feed, String fingerprint) {
 			this.feed = feed;
+			this.fingerprint = fingerprint;
+		}
+
+		boolean idle() {
+			return idleSinceNanos >= 0;
 		}
 	}
 
@@ -87,6 +106,8 @@ public final class FeedRegistry {
 		String key = source.key();
 		Entry entry;
 		StationFeed created = null;
+		StationFeed stale = null;
+		boolean resumed = false;
 		int refs;
 		synchronized (lock) {
 			if (shutDown) {
@@ -96,13 +117,30 @@ public final class FeedRegistry {
 				return new StubStationFeed(source.stationKey());
 			}
 			entry = feeds.get(key);
+			if (entry != null && entry.idle()) {
+				if (entry.fingerprint.equals(source.fingerprint())) {
+					entry.idleSinceNanos = -1;
+					resumed = true;
+				} else {
+					// Idle, but built from settings that have since changed: never resume it.
+					feeds.remove(key);
+					stale = entry.feed;
+					entry = null;
+				}
+			}
 			if (entry == null) {
-				entry = new Entry(createFeed(source));
+				entry = new Entry(createFeed(source), source.fingerprint());
 				feeds.put(key, entry);
 				created = entry.feed;
 			}
 			entry.refs++;
 			refs = entry.refs;
+		}
+		// The stale feed stops before the new one starts: an RTMP listener needs its port back.
+		stopQuietly(stale);
+		if (resumed) {
+			JockeyRadioMod.LOGGER.info("[jockey] feed resumed within its idle grace station={}",
+					entry.feed.stationKey());
 		}
 		if (created != null) {
 			try {
@@ -116,10 +154,11 @@ public final class FeedRegistry {
 	}
 
 	/**
-	 * Releases one reference to a station's feed, stopping and discarding the
-	 * feed when the count reaches zero. The stop itself runs outside the lock
-	 * (see {@link #acquire(FeedSource)}). {@code key} is the namespaced {@link
-	 * FeedSource#key()} used to acquire; the {@code station=} log value comes
+	 * Releases one reference to a station's feed. At zero a finite feed stops and is
+	 * discarded; a live one goes idle for {@link #IDLE_GRACE_NANOS} and stops in
+	 * {@link #expireIdle()} unless it is re-acquired first. The stop itself runs
+	 * outside the lock (see {@link #acquire(FeedSource)}). {@code key} is the namespaced
+	 * {@link FeedSource#key()} used to acquire; the {@code station=} log value comes
 	 * from the feed's bare {@link StationFeed#stationKey()} so the contract is
 	 * unchanged.
 	 */
@@ -127,7 +166,7 @@ public final class FeedRegistry {
 		StationFeed toStop = null;
 		synchronized (lock) {
 			Entry entry = feeds.get(key);
-			if (entry == null) {
+			if (entry == null || entry.idle()) {
 				JockeyRadioMod.LOGGER.warn("[jockey] feed release for unknown station={} (ignored)", key);
 				return;
 			}
@@ -135,16 +174,69 @@ public final class FeedRegistry {
 			JockeyRadioMod.LOGGER.info("[jockey] feed release station={} refs={}",
 					entry.feed.stationKey(), entry.refs);
 			if (entry.refs <= 0) {
-				feeds.remove(key);
-				toStop = entry.feed;
+				entry.refs = 0;
+				if (entry.feed.isLive()) {
+					entry.idleSinceNanos = System.nanoTime();
+				} else {
+					feeds.remove(key);
+					toStop = entry.feed;
+				}
+			}
+		}
+		stopQuietly(toStop);
+	}
+
+	/**
+	 * Stops every live feed whose idle grace has run out. Called each server tick; costs one
+	 * map scan under the lock only while some feed is idle.
+	 */
+	public void expireIdle() {
+		expireIdle(System.nanoTime());
+	}
+
+	/** {@link #expireIdle()} at a given {@code System.nanoTime()} reading, for tests. */
+	void expireIdle(long now) {
+		List<StationFeed> toStop = null;
+		synchronized (lock) {
+			for (Iterator<Entry> it = feeds.values().iterator(); it.hasNext(); ) {
+				Entry entry = it.next();
+				if (entry.idle() && now - entry.idleSinceNanos >= IDLE_GRACE_NANOS) {
+					it.remove();
+					if (toStop == null) {
+						toStop = new ArrayList<>();
+					}
+					toStop.add(entry.feed);
+				}
 			}
 		}
 		if (toStop != null) {
-			try {
-				toStop.stop();
-			} catch (Throwable t) {
-				JockeyRadioMod.LOGGER.error("[jockey] feed failed to stop station={}", toStop.stationKey(), t);
+			toStop.forEach(FeedRegistry::stopQuietly);
+		}
+	}
+
+	/** Stops every idle feed now, grace or not. Called after a disc edit or delete. */
+	public void stopUnreferenced() {
+		List<StationFeed> toStop = new ArrayList<>();
+		synchronized (lock) {
+			for (Iterator<Entry> it = feeds.values().iterator(); it.hasNext(); ) {
+				Entry entry = it.next();
+				if (entry.idle()) {
+					it.remove();
+					toStop.add(entry.feed);
+				}
 			}
+		}
+		toStop.forEach(FeedRegistry::stopQuietly);
+	}
+
+	private static void stopQuietly(StationFeed feed) {
+		if (feed == null) {
+			return;
+		}
+		try {
+			feed.stop();
+		} catch (Throwable t) {
+			JockeyRadioMod.LOGGER.error("[jockey] feed failed to stop station={}", feed.stationKey(), t);
 		}
 	}
 
@@ -344,6 +436,11 @@ public final class FeedRegistry {
 						feeds.size());
 			}
 		}
+	}
+
+	/** Chooses real feeds over stubs without the startup doctor's ffmpeg probe. Tests only. */
+	void useRealFeedsForTest(boolean real) {
+		useFfmpeg = real;
 	}
 
 	/** Number of live feeds (for the dev command / tests). */
