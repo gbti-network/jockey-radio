@@ -109,8 +109,7 @@ public final class RadioConfig {
 	 *       from a logged-in browser).</li>
 	 *   <li>Route through a residential IP: {@code ["--proxy", "http://user:pass@host:port"]}.</li>
 	 * </ul>
-	 * YouTube stays off whatever is passed here (see {@code PlatformPolicy}). Only consulted by
-	 * PLATFORM discs.
+	 * Only consulted by PLATFORM discs.
 	 */
 	public java.util.List<String> ytdlpExtraArgs = new java.util.ArrayList<>();
 	/**

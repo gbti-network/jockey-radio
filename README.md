@@ -81,8 +81,8 @@ ambient beds, event music, a fixed track. A file plays continuously rather than 
 ### Platform links (opt-in, off by default)
 An off-by-default option (`enablePlatformLinks`) that ships with the mod but is **not an advertised or
 promoted feature**. When an operator enables it, yt-dlp resolves a supported page link to a playable
-stream. YouTube links are not supported and are refused. The resolver is otherwise generic (it hands
-the link to yt-dlp); support and reliability vary by site, and some block datacenter IPs.
+stream. The resolver is generic (it hands the link to yt-dlp); support and reliability vary by site,
+and some block datacenter IPs.
 
 > ### ⚠️ Read before enabling platform links
 > Pulling a third-party stream into your server and playing it to others may be governed by **that

@@ -99,15 +99,13 @@ class YtDlpResolveTest {
 		}
 
 		@Test
-		@DisplayName("turns every YouTube extractor off, after the operator's extra args")
-		void youtubeExtractorsOff() {
+		@DisplayName("adds no extractor filter of its own, so the operator's passes through untouched")
+		void noExtractorFilter() {
 			List<String> list = Arrays.asList(YtDlpResolve.argv("yt-dlp", "https://x.test/v",
 					java.util.List.of("--use-extractors", "all")));
-			int ours = list.lastIndexOf("--use-extractors");
 			assertAll(
-					() -> assertEquals("default,-.*youtube.*", list.get(ours + 1)),
-					() -> assertTrue(ours > list.indexOf("all"), "our exclusion comes after the operator's"),
-					() -> assertTrue(ours < list.indexOf("--"), "and before the -- terminator"));
+					() -> assertEquals(1, java.util.Collections.frequency(list, "--use-extractors")),
+					() -> assertEquals("all", list.get(list.indexOf("--use-extractors") + 1)));
 		}
 
 		@Test

@@ -3,7 +3,6 @@ package fm.gbti.jockey.session;
 import fm.gbti.jockey.JockeyRadioMod;
 import fm.gbti.jockey.config.RadioConfig;
 import fm.gbti.jockey.disc.DiscDefinition;
-import fm.gbti.jockey.disc.PlatformPolicy;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -140,9 +139,7 @@ public final class FeedTester {
 			case FILE -> probeHls(def);
 			// PLATFORM's streamUrl is a page URL; a GET checks the page is reachable (yt-dlp
 			// does the real resolution at play time).
-			case PLATFORM -> PlatformPolicy.isRefused(def.streamUrl)
-					? new Result("Not supported", PlatformPolicy.REFUSED_MESSAGE)
-					: probeHls(def);
+			case PLATFORM -> probeHls(def);
 		};
 	}
 

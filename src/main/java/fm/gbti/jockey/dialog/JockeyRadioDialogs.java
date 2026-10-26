@@ -318,7 +318,7 @@ public final class JockeyRadioDialogs {
 		body.add(edit
 				? body(Component.literal("Editing this platform-link disc."))
 				: body(Lang.tr("jockey_radio.form.platform.body_create",
-						"New platform disc. Paste a page link and yt-dlp resolves it to audio. YouTube links are not supported.")));
+						"New platform disc. Paste a page link and yt-dlp resolves it to audio.")));
 		body.add(body(colorNote()));
 
 		List<Input> inputs = new ArrayList<>();

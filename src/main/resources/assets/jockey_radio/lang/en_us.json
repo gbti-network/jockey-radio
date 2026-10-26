@@ -30,7 +30,7 @@
 	"jockey_radio.form.file.browse_title": "Audio folder",
 	"jockey_radio.form.file.title_create": "New file disc",
 	"jockey_radio.form.file.title_edit": "Edit file disc",
-	"jockey_radio.form.platform.body_create": "New platform disc. Paste a page link and yt-dlp resolves it to audio. YouTube links are not supported.",
+	"jockey_radio.form.platform.body_create": "New platform disc. Paste a page link and yt-dlp resolves it to audio.",
 	"jockey_radio.form.platform.title_create": "New platform disc",
 	"jockey_radio.form.platform.title_edit": "Edit platform disc",
 	"jockey_radio.form.pull.body_create": "New stream disc. The server plays any stream URL: a SavePoint station, an m3u8 playlist or an Icecast/HTTP stream.",
