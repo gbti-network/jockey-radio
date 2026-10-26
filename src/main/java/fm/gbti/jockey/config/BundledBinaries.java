@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Ships ffmpeg and yt-dlp INSIDE the jar and installs them on first run, so an
+ * Ships ffmpeg, yt-dlp and deno INSIDE the jar and installs them on first run, so an
  * operator can drop the mod into {@code mods/} and have working audio with no shell, no
  * PATH, and no manual binary upload.
  *
@@ -52,8 +52,8 @@ public final class BundledBinaries {
 	 * change, so a mod upgrade re-extracts instead of running a stale copy.
 	 */
 	enum Platform {
-		LINUX_AMD64("linux-amd64", "", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.08.19+jockey-radio"),
-		WINDOWS_AMD64("windows-amd64", ".exe", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.08.19+jockey-radio");
+		LINUX_AMD64("linux-amd64", "", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.10.21+deno-2.9.8+jockey-radio"),
+		WINDOWS_AMD64("windows-amd64", ".exe", "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.10.21+deno-2.9.8+jockey-radio");
 
 		final String dir;
 		final String exeSuffix;
@@ -106,14 +106,18 @@ public final class BundledBinaries {
 				Files.createDirectories(binDir);
 				extract(platform.resource("ffmpeg"), ffmpeg);
 				extract(platform.resource("yt-dlp"), ytdlp);
-				// Up to 0.1.3 the bundle also carried deno, which yt-dlp needed only for YouTube.
-				// YouTube is no longer supported, so reclaim the ~100 MB an older version extracted.
-				Files.deleteIfExists(binDir.resolve(platform.fileName("deno")));
+				// deno is optional (a thin/older bundle may lack it); yt-dlp uses it for the platforms
+				// that need JS. It sits in the same bin dir, which LinkResolvedFeed puts on yt-dlp's PATH.
+				boolean deno = JockeyRadioMod.class.getResource(platform.resource("deno")) != null;
+				if (deno) {
+					extract(platform.resource("deno"), binDir.resolve(platform.fileName("deno")));
+				}
 				// Marker written LAST, after every binary is in place, so a crash mid-extract
 				// leaves it stale and the next boot re-extracts rather than trusting a partial set.
 				Files.writeString(marker, platform.bundleVersion);
-				JockeyRadioMod.LOGGER.info("[jockey] installed bundled ffmpeg + yt-dlp to {} ({} {})",
-						binDir, platform.dir, platform.bundleVersion);
+				JockeyRadioMod.LOGGER.info(
+						"[jockey] installed bundled ffmpeg + yt-dlp{} to {} ({} {})",
+						deno ? " + deno" : "", binDir, platform.dir, platform.bundleVersion);
 			}
 
 			config.ffmpegBinary = preferBundled("ffmpegBinary", config.ffmpegBinary, FFMPEG_DEFAULT, ffmpeg);

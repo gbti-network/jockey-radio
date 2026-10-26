@@ -186,8 +186,10 @@ function runBuild(javaHome, wslBuild) {
 const BUNDLED = [
   'jockey_radio/bin/linux-amd64/ffmpeg',
   'jockey_radio/bin/linux-amd64/yt-dlp',
+  'jockey_radio/bin/linux-amd64/deno',
   'jockey_radio/bin/windows-amd64/ffmpeg.exe',
   'jockey_radio/bin/windows-amd64/yt-dlp.exe',
+  'jockey_radio/bin/windows-amd64/deno.exe',
 ];
 const NOTICE_ENTRY = 'jockey_radio/THIRD-PARTY-NOTICES.txt';
 

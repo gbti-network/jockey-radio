@@ -109,7 +109,8 @@ public final class RadioConfig {
 	 *       from a logged-in browser).</li>
 	 *   <li>Route through a residential IP: {@code ["--proxy", "http://user:pass@host:port"]}.</li>
 	 * </ul>
-	 * Only consulted by PLATFORM discs.
+	 * The bundled deno JS runtime is wired up automatically (on yt-dlp's PATH), so you do not need to
+	 * pass {@code --js-runtimes} for that. Only consulted by PLATFORM discs.
 	 */
 	public java.util.List<String> ytdlpExtraArgs = new java.util.ArrayList<>();
 	/**

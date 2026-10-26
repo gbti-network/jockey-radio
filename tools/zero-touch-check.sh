@@ -6,9 +6,9 @@
 # which would make the permission checks meaningless), with an empty PATH so no host
 # ffmpeg or yt-dlp can be found. Five boots:
 #
-#   fresh     the bundled ffmpeg and yt-dlp self-extract, owner-only, and run
+#   fresh     the bundled ffmpeg, yt-dlp and deno self-extract, owner-only, and run
 #   reboot    the version marker is current, so nothing is extracted again
-#   upgrade   a 0.1.3 bin folder (old marker, deno) is re-extracted and its deno removed
+#   upgrade   a 0.1.4 bin folder (old marker, no deno) is re-extracted and gains deno
 #   disabled  useBundledBinaries=false: ffmpeg is reported missing and the server still starts
 #   stale     ffmpegBinary names a path that no longer exists: the bundled copy is used instead
 #
@@ -94,17 +94,18 @@ logged() { grep -qF -- "$2" "$WORK/boot-$1.log"; }
 no_crash_reports() { [[ -z "$(ls -A "$WORK/crash-reports" 2>/dev/null)" ]]; }
 owner_only_exec() { [[ "$(stat -c %a "$1")" == 700 ]]; }
 ffmpeg_runs() { [[ "$(env -i "$BIN/ffmpeg" -hide_banner -version 2>&1 | head -n 1)" == "ffmpeg version"* ]]; }
+deno_runs() { [[ "$(env -i "$BIN/deno" --version 2>&1 | head -n 1)" == "deno "* ]]; }
 no_jockey_errors() { ! grep -E '\[jockey\].*(could not install|Exception)' "$WORK/boot-$1.log"; }
 
 echo "boot 1: fresh"
 boot fresh
 check "server reached ready" logged fresh 'Done ('
-check "bundled binaries installed" logged fresh '[jockey] installed bundled ffmpeg + yt-dlp to'
-for tool in ffmpeg yt-dlp; do
+check "bundled binaries installed" logged fresh '[jockey] installed bundled ffmpeg + yt-dlp + deno to'
+for tool in ffmpeg yt-dlp deno; do
 	check "$tool extracted, owner-only (700)" owner_only_exec "$BIN/$tool"
 done
-check "no deno extracted" test ! -e "$BIN/deno"
 check "extracted ffmpeg runs" ffmpeg_runs
+check "extracted deno runs" deno_runs
 check "host verdict: extracted binaries are executable" logged fresh 'host VERDICT: extracted binaries'
 check "no jockey errors" no_jockey_errors fresh
 check "no crash reports" no_crash_reports
@@ -114,13 +115,13 @@ boot reboot
 check "server reached ready" logged reboot 'Done ('
 check "nothing extracted again" bash -c "! grep -qF 'installed bundled' '$WORK/boot-reboot.log'"
 
-echo "boot 3: upgrade from a 0.1.3 bin folder"
-echo "deno-btbn-N125748+ytdlp-2026.07.04+jockey-radio" > "$BIN/.bundle-version"
-printf 'stale deno' > "$BIN/deno"
+echo "boot 3: upgrade from a 0.1.4 bin folder"
+echo "ffmpeg-btbn-n9.0.2-27+ytdlp-2026.08.19+jockey-radio" > "$BIN/.bundle-version"
+rm -f "$BIN/deno"
 boot upgrade
 check "server reached ready" logged upgrade 'Done ('
-check "old bundle re-extracted" logged upgrade '[jockey] installed bundled ffmpeg + yt-dlp to'
-check "stale deno removed" test ! -e "$BIN/deno"
+check "old bundle re-extracted" logged upgrade '[jockey] installed bundled ffmpeg + yt-dlp + deno to'
+check "deno extracted, owner-only (700)" owner_only_exec "$BIN/deno"
 check "no jockey errors" no_jockey_errors upgrade
 
 echo "boot 4: bundling disabled"

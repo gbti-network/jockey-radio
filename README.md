@@ -37,9 +37,10 @@ and ejecting it stops the feed. Two jukeboxes playing the same disc share one st
 - **Java 25**, **Fabric Loader 0.19.3+**, and **Fabric API** (`0.155.2+26.2` target).
 - **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat) (server side) is required**.
   It is how the audio reaches players.
-- **ffmpeg** (and **yt-dlp** for platform links). On linux/amd64 and windows/amd64 these are
-  **bundled in the jar** and self-extract on first run (about 183 MB on Linux and 152 MB on Windows,
-  into the config dir); on other platforms put `ffmpeg` on the `PATH` or set `ffmpegBinary`.
+- **ffmpeg** (and, for platform links, **yt-dlp** with the **deno** JavaScript runtime it uses). On
+  linux/amd64 and windows/amd64 these are **bundled in the jar** and self-extract on first run (about
+  279 MB on Linux and 251 MB on Windows, into the config dir); on other platforms put `ffmpeg` on the
+  `PATH` or set `ffmpegBinary`.
 
 **To listen:** Fabric Loader + Fabric API + the Simple Voice Chat client. The Jockey Radio jar is
 **not** required on the client.
@@ -114,7 +115,7 @@ ones you are most likely to touch:
 ```jsonc
 {
   "enablePlatformLinks": false,   // opt-in platform-link resolution, off by default (see the warning above)
-  "useBundledBinaries": true,     // self-extract the bundled ffmpeg/yt-dlp (linux/windows amd64)
+  "useBundledBinaries": true,     // self-extract the bundled ffmpeg/yt-dlp/deno (linux/windows amd64)
   "adminPermissionLevel": 3,      // op level required by /jockey (0..4)
   "nowPlayingHud": true,          // the NOW-PLAYING boss bar
   "nowPlayingHudMode": "beacon",  // "beacon" (needs a trigger block nearby) or "always"
@@ -153,7 +154,7 @@ should validate capacity on their own hosting tier before using Jockey Radio for
 
 - Audio delivery uses the **[Simple Voice Chat](https://modrinth.com/mod/simple-voice-chat)** plugin
   API by Max Henkel (a declared dependency, invoked via its API; none of its code is bundled).
-- Bundled binaries: **ffmpeg** (LGPL build) and **yt-dlp** (Unlicense); the pure-Java
+- Bundled binaries: **ffmpeg** (LGPL build), **yt-dlp** (Unlicense) and **deno** (MIT); the pure-Java
   **Concentus** Opus encoder is included jar-in-jar. Full notices and license texts ship in
   `THIRD-PARTY-NOTICES.txt` inside the jar.
 - **Jockey Radio** is a **GBTI** project, with **SavePoint** as an optional featured broadcasting

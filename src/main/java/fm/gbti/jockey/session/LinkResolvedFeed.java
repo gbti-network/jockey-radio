@@ -47,6 +47,12 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 	private final String ytdlpBinary;
 	/** Operator extra args for yt-dlp (cookies/proxy/extractor-args); never null. */
 	private final List<String> ytdlpExtraArgs;
+	/**
+	 * Directory of {@link #ytdlpBinary} when it is a real path, else null. Prepended to the yt-dlp
+	 * subprocess PATH so a co-located JS runtime (the bundled {@code deno}) is auto-detected - yt-dlp
+	 * needs it to solve some platforms' signature challenge.
+	 */
+	private final String ytdlpBinDir;
 	/** sow-012: play once and stop (false) vs loop (true) - only honoured for a NON-live VOD. */
 	private final boolean repeat;
 	/** sow-012: whether the LAST resolve reported a live source ({@code is_live=true}); volatile, set per resolve. */
@@ -67,6 +73,7 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		this.displayUrl = endpoint.displayUrl();
 		this.ytdlpBinary = ytdlpBinary;
 		this.ytdlpExtraArgs = ytdlpExtraArgs == null ? List.of() : List.copyOf(ytdlpExtraArgs);
+		this.ytdlpBinDir = binDirOf(ytdlpBinary);
 		this.repeat = repeat;
 		// The page URL is usually public, but the RESOLVED media URL that ends up in the
 		// ffmpeg argv is a signed CDN link. Registering here means the base sanitize masks
@@ -103,6 +110,13 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 			// bare "exit=1"). One merged stream also means no second pipe to drain.
 			ProcessBuilder pb = new ProcessBuilder(YtDlpResolve.argv(ytdlpBinary, pageUrl, ytdlpExtraArgs))
 					.redirectErrorStream(true);
+			if (ytdlpBinDir != null) {
+				// Put the bundled bin dir on PATH so yt-dlp finds the co-located `deno` JS runtime
+				// (enabled by default in yt-dlp) - required for some platforms' signature challenge.
+				String path = pb.environment().getOrDefault("PATH", "");
+				pb.environment().put("PATH",
+						path.isEmpty() ? ytdlpBinDir : ytdlpBinDir + java.io.File.pathSeparator + path);
+			}
 			p = pb.start();
 			// Publish the handle so stop() can kill a resolve that is still running. Without
 			// this the child is reachable only from this frame: an interrupt cannot break a
@@ -188,6 +202,20 @@ public final class LinkResolvedFeed extends AbstractFfmpegFeed {
 		if (p != null) {
 			p.destroyForcibly();
 		}
+	}
+
+	/** The parent directory of a real yt-dlp path (for the deno PATH), or null for a bare PATH name. */
+	private static String binDirOf(String binary) {
+		if (binary == null || binary.isBlank()) {
+			return null;
+		}
+		java.nio.file.Path p = java.nio.file.Path.of(binary);
+		// A bare "yt-dlp" (PATH lookup) has no usable parent dir; only a real path co-locates deno.
+		if (!p.isAbsolute() && p.getNameCount() == 1) {
+			return null;
+		}
+		java.nio.file.Path parent = p.toAbsolutePath().getParent();
+		return parent == null ? null : parent.toString();
 	}
 
 	/**
