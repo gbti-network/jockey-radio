@@ -28,6 +28,12 @@
 // and .zip also work). A missing archive stops the release before anything changes, and the
 // error prints the download commands. Update SOURCE_ARCHIVES whenever the bundled ffmpeg changes.
 //
+// Modrinth and CurseForge get a second jar, <jar>-linux.jar, made by tools/linux-only-jar.py: the
+// same jar without the windows-amd64 binaries, with its notice rewritten to match. CurseForge
+// rejects a jar that holds .exe files (0.1.5, 2026-10-26). The Linux jar stays in build/libs for
+// the directory uploads; the GitHub release carries the full jar only. If the tool fails, the
+// release stops before anything is committed.
+//
 // JOCKEY_RELEASE_API_BASE overrides https://api.github.com for the REST path (used when the gh
 // CLI is not logged in), so the flow can be exercised against a local stand-in.
 //
@@ -76,6 +82,17 @@ function run(cmd, cmdArgs, opts = {}) {
 function tryRun(cmd, cmdArgs, opts = {}) {
   const r = spawnSync(cmd, cmdArgs, { cwd: ROOT, encoding: 'utf8', ...opts });
   return { code: r.status ?? 1, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };
+}
+// Runs a Python script isolated (-I), trying python3 then python; { status, detail } where detail
+// is the last line it printed, which carries the reason when the script refuses.
+function runPython(scriptArgs) {
+  for (const exe of ['python3', 'python']) {
+    const r = spawnSync(exe, ['-I', ...scriptArgs], { cwd: ROOT, encoding: 'utf8' });
+    if (r.error && r.error.code === 'ENOENT') continue;
+    const out = `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n');
+    return { status: r.status, detail: out[out.length - 1] || '' };
+  }
+  return { status: 1, detail: 'no python3 or python on PATH' };
 }
 function git(...a) { return run('git', a); }
 function gitOk(...a) { return tryRun('git', a); }
@@ -508,6 +525,19 @@ async function main() {
     throw new Error('the jar bundles ffmpeg, so the release must attach its source, and .product/sources/ lacks:' + sourcesHelp(sources.missing));
   }
   const assets = [jarPath, ...(bundle.thin ? [] : sources.found)];
+  // The jar for Modrinth and CurseForge, without the windows-amd64 binaries (see the header).
+  let linuxJar = null;
+  if (!bundle.thin) {
+    step('making the Linux-only jar for Modrinth and CurseForge');
+    const made = runPython([path.join(ROOT, 'tools', 'linux-only-jar.py'), jarPath]);
+    const why = `tools/linux-only-jar.py failed, so there is no jar for Modrinth and CurseForge: ${made.detail}`;
+    if (made.status === 0) {
+      linuxJar = jarPath.replace(/\.jar$/, '-linux.jar');
+      log(C.dim(`    built ${path.basename(linuxJar)} (${(readFileSync(linuxJar).length / 1e6).toFixed(1)} MB), no .exe inside`));
+    } else if (NO_RELEASE) warn(why);
+    else throw new Error(why);
+  }
+  const directoryNote = () => { if (linuxJar) log(`  for Modrinth and CurseForge: ${path.relative(ROOT, linuxJar)}`); };
 
   // 3. Commit and tag, locally ------------------------------------------------
   step('committing and tagging locally');
@@ -542,6 +572,7 @@ async function main() {
   if (NO_RELEASE) {
     log('');
     log(C.green('✓ ') + `pushed ${tag}. GitHub release skipped (--no-release).`);
+    directoryNote();
     return;
   }
 
@@ -551,6 +582,7 @@ async function main() {
   log('');
   log(C.green('✓ ') + C.bold(`released ${title}`));
   if (url) log('  ' + url);
+  directoryNote();
 }
 
 // What a failure leaves behind, said plainly. Before the push, the draft is deleted and the local
