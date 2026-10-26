@@ -43,6 +43,13 @@ class YtDlpResolveTest {
 		}
 
 		@Test
+		@DisplayName("prefers audio-only HLS first (regression: YouTube https audio is 403 to ffmpeg)")
+		void prefersAudioOnlyHls() {
+			assertTrue(YtDlpResolve.FORMAT_SELECTOR.startsWith("bestaudio[protocol^=m3u8][vcodec=none]/"),
+					"audio-only HLS must be the first preference: " + YtDlpResolve.FORMAT_SELECTOR);
+		}
+
+		@Test
 		@DisplayName("keeps a bare fallback so a DASH-only source still resolves")
 		void keepsFallback() {
 			assertTrue(YtDlpResolve.FORMAT_SELECTOR.endsWith("/bestaudio/best"),

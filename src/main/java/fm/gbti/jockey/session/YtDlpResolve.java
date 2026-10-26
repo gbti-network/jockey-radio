@@ -30,12 +30,18 @@ public final class YtDlpResolve {
 	 * {@code .mpd} fails to open with "Invalid data found" (observed on Mixcloud, which offers HLS and
 	 * progressive http alternatives). A bare {@code bestaudio/best} picks DASH on those sources.
 	 *
+	 * <p>Audio-only HLS comes first where a source offers it. YouTube serves its audio-only files
+	 * over https as well, but answers ffmpeg's single request for one with 403 Forbidden (yt-dlp
+	 * itself reads them in ranged chunks); its audio-only HLS plays. Checked 2026-10-26 with yt-dlp
+	 * 2026.10.21: SoundCloud, Mixcloud and Twitch pick the same format either way.</p>
+	 *
 	 * <p>The trailing {@code /bestaudio/best} keeps a DASH-only source resolving — it then fails at
 	 * ffmpeg and rides the reconnect ladder, exactly as before — rather than returning no URL at all.
 	 * Most sources are unaffected: their {@code bestaudio} is opus/aac over plain https, not DASH.</p>
 	 */
 	public static final String FORMAT_SELECTOR =
-			"bestaudio[protocol!=http_dash_segments]/best[protocol!=http_dash_segments]/bestaudio/best";
+			"bestaudio[protocol^=m3u8][vcodec=none]/bestaudio[protocol!=http_dash_segments]"
+					+ "/best[protocol!=http_dash_segments]/bestaudio/best";
 
 	/** yt-dlp's protocol name for MPEG-DASH segment streams — the one this ffmpeg cannot demux. */
 	public static final String DASH_PROTOCOL = "http_dash_segments";
